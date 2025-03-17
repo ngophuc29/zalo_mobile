@@ -26,7 +26,7 @@ const GroupChatModal = ({
             visible={true}
             onRequestClose={() => setGroupModalVisible(false)}
         >
-            <TouchableOpacity
+            <View
                 style={styles.modalOverlay}
                 activeOpacity={1}
                 onPressOut={() => setGroupModalVisible(false)}
@@ -67,7 +67,7 @@ const GroupChatModal = ({
                         <Text style={styles.createButtonText}>Tạo Nhóm</Text>
                     </TouchableOpacity>
                 </View>
-            </TouchableOpacity>
+            </View>
         </Modal>
     );
 };

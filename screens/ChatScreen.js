@@ -1,5 +1,5 @@
 // ChatScreen.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -12,8 +12,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import io from 'socket.io-client';
 import ChatContainer from './ChatContainer';
-import GroupChatModal from './GroupChatModal';  // Component modal tạo nhóm chat
-// (Các component khác như Contacts, FriendModal, … nếu cần)
+import GroupChatModal from './GroupChatModal'; // Component Modal tạo nhóm chat
+import Toast from 'react-native-toast-message';
 
 const socket = io("http://localhost:5000");
 
@@ -32,9 +32,9 @@ const getMessageId = (msg) => {
 };
 
 const ChatScreen = () => {
-    // Các state liên quan đến chat và group
+    // --- State Chat ---
     const [username, setUsername] = useState(null);
-    const [accounts, setAccounts] = useState([]); // Danh sách tài khoản từ backend
+    const [accounts, setAccounts] = useState([]);
     const [searchFilter, setSearchFilter] = useState('');
     const [filteredAccounts, setFilteredAccounts] = useState([]);
     const [activeChats, setActiveChats] = useState({});
@@ -43,18 +43,19 @@ const ChatScreen = () => {
     const [message, setMessage] = useState('');
     const [activeEmotionMsgId, setActiveEmotionMsgId] = useState(null);
 
-    // Các state dành cho group chat
+    // --- State Group Chat ---
     const [groupModalVisible, setGroupModalVisible] = useState(false);
     const [groupName, setGroupName] = useState("");
     const [selectedMembers, setSelectedMembers] = useState([]);
-    const [groupInfo, setGroupInfo] = useState(null);
-    // (Các state khác: friendModalVisible, friendInput, friends, … nếu cần)
 
-    // Lấy username từ AsyncStorage khi component mount
+    // Đăng ký username cho socket khi lấy được username
     useEffect(() => {
         AsyncStorage.getItem('username')
             .then(storedUsername => {
-                if (storedUsername) setUsername(storedUsername);
+                if (storedUsername) {
+                    setUsername(storedUsername);
+                    socket.emit("registerUser", storedUsername);
+                }
             })
             .catch(error => console.error("Error fetching username:", error));
     }, []);
@@ -67,7 +68,7 @@ const ChatScreen = () => {
             .catch(err => console.error("Error fetching accounts:", err));
     }, []);
 
-    // Lọc tài khoản khi searchFilter thay đổi
+    // Lọc tài khoản theo searchFilter
     useEffect(() => {
         if (searchFilter.trim().length > 0) {
             const filtered = accounts.filter(acc =>
@@ -79,7 +80,7 @@ const ChatScreen = () => {
         }
     }, [searchFilter, accounts]);
 
-    // Khi có username, lấy danh sách cuộc trò chuyện qua socket
+    // Lấy danh sách cuộc trò chuyện qua socket
     useEffect(() => {
         if (!socket || !username) return;
         socket.emit("getUserConversations", username);
@@ -161,7 +162,7 @@ const ChatScreen = () => {
         };
     }, [socket, activeRoom]);
 
-    // Lắng nghe event "emotion" để cập nhật reaction khi có thay đổi
+    // Lắng nghe event "emotion" để cập nhật reaction realtime
     useEffect(() => {
         if (!socket) return;
         const onEmotion = (data) => {
@@ -184,6 +185,40 @@ const ChatScreen = () => {
             socket.off("emotion", onEmotion);
         };
     }, [socket]);
+    const showToast = () => {
+        Toast.show({
+            type: 'success',
+            position: 'bottom',
+            text1: 'Nhóm chat mới đã được tạo:' + groupChat.groupName,
+
+        });
+    }
+    // Lắng nghe event "newGroupChat" để cập nhật chat list ngay khi tạo nhóm (optimistic update)
+    useEffect(() => {
+        if (!socket) return;
+        const onNewGroupChat = (data) => {
+            try {
+                const groupChat = JSON.parse(data);
+                setActiveChats(prev => ({
+                    ...prev,
+                    [groupChat.roomId]: {
+                        partner: groupChat.groupName,
+                        unread: 0,
+                        messages: [],
+                        isGroup: true,
+                    },
+                }));
+              
+                showToast()
+            } catch (error) {
+                console.error("Error parsing newGroupChat:", error);
+            }
+        };
+        socket.on("newGroupChat", onNewGroupChat);
+        return () => {
+            socket.off("newGroupChat", onNewGroupChat);
+        };
+    }, [socket]);
 
     // Hàm gửi tin nhắn
     const sendMessageHandler = (msgObj) => {
@@ -195,7 +230,7 @@ const ChatScreen = () => {
         setMessages(prev => [...prev, msgObj]);
     };
 
-    // Khi bấm vào một chat từ danh sách
+    // Khi bấm vào chat từ danh sách
     const handleRoomClick = (room) => {
         setActiveRoom(room);
         socket.emit("join", room);
@@ -209,7 +244,10 @@ const ChatScreen = () => {
         setActiveRoom(room);
         socket.emit("join", room);
         setMessages([]);
-        setActiveChats(prev => ({ ...prev, [room]: { partner: targetUser, unread: 0, messages: [] } }));
+        setActiveChats(prev => ({
+            ...prev,
+            [room]: { partner: targetUser, unread: 0, messages: [] },
+        }));
     };
 
     // Hàm gửi reaction (optimistic update)
@@ -222,7 +260,6 @@ const ChatScreen = () => {
         };
         console.log("Emitting reaction:", reactionData);
         socket.emit("emotion", JSON.stringify(reactionData));
-        // Cập nhật UI ngay lập tức
         setMessages(prev =>
             prev.map(msg =>
                 getMessageId(msg).toString() === msgId.toString()
@@ -232,7 +269,7 @@ const ChatScreen = () => {
         );
     };
 
-    // Hàm tạo nhóm chat (Group Chat)
+    // Hàm tạo nhóm chat
     const handleCreateGroup = () => {
         if (!groupName) {
             Alert.alert("Thông báo", "Vui lòng nhập tên nhóm");
@@ -242,7 +279,9 @@ const ChatScreen = () => {
             Alert.alert("Thông báo", "Chọn ít nhất 1 thành viên");
             return;
         }
+        // Emit event tạo nhóm; backend sẽ tự thêm owner từ socket (đã đăng ký)
         socket.emit("createGroupChat", { groupName, members: selectedMembers });
+        // Ở đây có thể thực hiện optimistic update để cập nhật chat list ngay lập tức nếu cần
         setGroupModalVisible(false);
         setGroupName("");
         setSelectedMembers([]);
@@ -251,7 +290,6 @@ const ChatScreen = () => {
     const chatList = Object.keys(activeChats).map(room => ({ room, ...activeChats[room] }));
     const isSearching = searchFilter.trim().length > 0;
 
-    // Nếu đã chọn một room, hiển thị ChatContainer
     if (activeRoom) {
         return (
             <ChatContainer
