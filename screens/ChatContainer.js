@@ -10,7 +10,7 @@ import {
     StyleSheet,
     Alert,
 } from 'react-native';
-
+import GroupDetailsModal from './GroupDetailsModal';
 const ChatContainer = ({
     currentRoom,
     messages,
@@ -26,6 +26,18 @@ const ChatContainer = ({
     getMessageId,
     onGetGroupDetails,
     onBack,
+
+    // Group chat related props
+    groupDetailsVisible,
+    groupInfo,
+    handleRemoveGroupMember,
+    handleTransferGroupOwner,
+    handleAssignDeputy,
+    handleCancelDeputy,
+    handleAddGroupMember,
+    handleLeaveGroup,
+    handleDisbandGroup,
+    setGroupDetailsVisible,
 }) => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showImageUploader, setShowImageUploader] = useState(false);
@@ -205,6 +217,20 @@ const ChatContainer = ({
                         <Text style={styles.uploadButton}>Simulate Upload Success</Text>
                     </TouchableOpacity>
                 </View>
+            )}
+            {groupDetailsVisible && groupInfo && (
+                <GroupDetailsModal
+                    groupInfo={groupInfo}
+                    setGroupDetailsVisible={setGroupDetailsVisible}
+                    myname={myname}
+                    handleRemoveGroupMember={handleRemoveGroupMember}
+                    handleTransferGroupOwner={handleTransferGroupOwner}
+                    handleAssignDeputy={handleAssignDeputy}
+                    handleCancelDeputy={handleCancelDeputy}
+                    handleAddGroupMember={handleAddGroupMember}
+                    handleLeaveGroup={handleLeaveGroup}
+                    handleDisbandGroup={handleDisbandGroup}
+                />
             )}
         </View>
     );

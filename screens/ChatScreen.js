@@ -1,5 +1,4 @@
-// ChatScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -9,11 +8,11 @@ import {
     StyleSheet,
     Alert,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import io from 'socket.io-client';
 import ChatContainer from './ChatContainer';
-import GroupChatModal from './GroupChatModal'; // Component Modal tạo nhóm chat
-import Toast from 'react-native-toast-message';
+import GroupChatModal from './GroupChatModal';
 
 const socket = io("http://localhost:5000");
 
@@ -31,8 +30,18 @@ const getMessageId = (msg) => {
     return null;
 };
 
+const showToast = (title, message, type = 'info') => {
+    Toast.show({
+        type, // 'success', 'error', 'info'
+        text1: title,
+        text2: message,
+        position: 'top',
+        visibilityTime: 3000,
+    });
+};
+
 const ChatScreen = () => {
-    // --- State Chat ---
+    // State liên quan đến chat
     const [username, setUsername] = useState(null);
     const [accounts, setAccounts] = useState([]);
     const [searchFilter, setSearchFilter] = useState('');
@@ -43,12 +52,18 @@ const ChatScreen = () => {
     const [message, setMessage] = useState('');
     const [activeEmotionMsgId, setActiveEmotionMsgId] = useState(null);
 
-    // --- State Group Chat ---
+    // State dành cho Group Chat
     const [groupModalVisible, setGroupModalVisible] = useState(false);
+    const [groupDetailsVisible, setGroupDetailsVisible] = useState(false);
+    const [groupInfo, setGroupInfo] = useState(null);
     const [groupName, setGroupName] = useState("");
     const [selectedMembers, setSelectedMembers] = useState([]);
 
-    // Đăng ký username cho socket khi lấy được username
+    // Các ref hỗ trợ
+    const joinedRoomsRef = useRef(new Set());
+    const processedUnreadMessagesRef = useRef(new Set());
+
+    // Đăng ký username cho socket khi component mount
     useEffect(() => {
         AsyncStorage.getItem('username')
             .then(storedUsername => {
@@ -60,7 +75,43 @@ const ChatScreen = () => {
             .catch(error => console.error("Error fetching username:", error));
     }, []);
 
-    // Fetch danh sách tài khoản từ API
+    // Lắng nghe event "groupDetailsResult" để cập nhật thông tin nhóm realtime
+    useEffect(() => {
+        if (!socket) return;
+        const onGroupDetailsResult = (data) => {
+            try {
+                const result = typeof data === 'string' ? JSON.parse(data) : data;
+                if (result.success) {
+                    setGroupInfo(result.group);
+                    setGroupDetailsVisible(true);
+                } else {
+                    showToast("Error", result.message, "error");
+                }
+            } catch (error) {
+                console.error("Error parsing groupDetailsResult:", error);
+            }
+        };
+        socket.on("groupDetailsResult", onGroupDetailsResult);
+        return () => {
+            socket.off("groupDetailsResult", onGroupDetailsResult);
+        };
+    }, [socket]);
+
+    // Khi modal chi tiết nhóm đang mở, nếu có sự thay đổi (groupUpdated) thì refresh thông tin nhóm
+    useEffect(() => {
+        if (!socket) return;
+        const onGroupUpdated = (data) => {
+            if (groupDetailsVisible && activeRoom) {
+                socket.emit("getGroupDetails", { roomId: activeRoom });
+            }
+        };
+        socket.on("groupUpdated", onGroupUpdated);
+        return () => {
+            socket.off("groupUpdated", onGroupUpdated);
+        };
+    }, [socket, groupDetailsVisible, activeRoom]);
+
+    // Fetch danh sách tài khoản
     useEffect(() => {
         fetch("http://localhost:5000/api/accounts")
             .then(res => res.json())
@@ -103,6 +154,7 @@ const ChatScreen = () => {
                             partner: chat.groupName,
                             unread: 0,
                             messages: chat.messages || [],
+                            isGroup: true,
                         };
                     });
                 }
@@ -117,7 +169,7 @@ const ChatScreen = () => {
         };
     }, [socket, username]);
 
-    // Lắng nghe event "history" khi join room
+    // Lắng nghe event "history" khi join room để load tin nhắn
     useEffect(() => {
         if (!socket || !activeRoom) return;
         const onHistory = (data) => {
@@ -185,45 +237,28 @@ const ChatScreen = () => {
             socket.off("emotion", onEmotion);
         };
     }, [socket]);
-    const showToast = () => {
-        Toast.show({
-            type: 'success',
-            position: 'bottom',
-            text1: 'Nhóm chat mới đã được tạo:' + groupChat.groupName,
 
-        });
-    }
-    // Lắng nghe event "newGroupChat" để cập nhật chat list ngay khi tạo nhóm (optimistic update)
+    // *** Thêm sự kiện "thread" để realtime nhận tin nhắn mới (bao gồm group chat) ***
     useEffect(() => {
         if (!socket) return;
-        const onNewGroupChat = (data) => {
+        const onThread = (data) => {
             try {
-                const groupChat = JSON.parse(data);
-                setActiveChats(prev => ({
-                    ...prev,
-                    [groupChat.roomId]: {
-                        partner: groupChat.groupName,
-                        unread: 0,
-                        messages: [],
-                        isGroup: true,
-                    },
-                }));
-              
-                showToast()
+                const newMsg = JSON.parse(data);
+                setMessages(prev => [...prev, newMsg]);
             } catch (error) {
-                console.error("Error parsing newGroupChat:", error);
+                console.error("Error parsing thread:", error);
             }
         };
-        socket.on("newGroupChat", onNewGroupChat);
+        socket.on("thread", onThread);
         return () => {
-            socket.off("newGroupChat", onNewGroupChat);
+            socket.off("thread", onThread);
         };
     }, [socket]);
 
     // Hàm gửi tin nhắn
     const sendMessageHandler = (msgObj) => {
         if (!activeRoom) {
-            Alert.alert("Error", "Please select a chat first.");
+            showToast("Error", "Please select a chat first.", "error");
             return;
         }
         socket.emit("message", JSON.stringify(msgObj));
@@ -269,19 +304,96 @@ const ChatScreen = () => {
         );
     };
 
+    // --- Các hàm quản lý Group Chat ---
+    const handleRemoveGroupMember = (roomId, member) => {
+        socket.emit("removeGroupMember", { roomId, memberToRemove: member });
+        showToast("Remove Member", `Removed ${member}`, "info");
+    };
+
+    const handleTransferGroupOwner = (roomId, newOwner) => {
+        socket.emit("transferGroupOwner", { roomId, newOwner });
+        showToast("Transfer Ownership", `Ownership transferred to ${newOwner}`, "info");
+    };
+
+    const handleAssignDeputy = (roomId, member) => {
+        socket.emit("assignDeputy", { roomId, member });
+        showToast("Assign Deputy", `Deputy assigned to ${member}`, "info");
+    };
+
+    const handleCancelDeputy = (roomId, member) => {
+        socket.emit("cancelDeputy", { roomId, member });
+        showToast("Cancel Deputy", `Deputy role cancelled for ${member}`, "info");
+    };
+
+    const handleAddGroupMember = (newMember) => {
+        if (newMember.trim() === "") {
+            showToast("Thông báo", "Vui lòng nhập username của thành viên cần thêm", "error");
+            return;
+        }
+        socket.emit("addGroupMember", { roomId: activeRoom, newMember });
+    };
+
+    const handleLeaveGroup = () => {
+        socket.emit("leaveGroup", { roomId: activeRoom });
+        setGroupDetailsVisible(false);
+        showToast("Leave Group", "You have left the group", "info");
+        setActiveChats(prev => {
+            const updated = { ...prev };
+            delete updated[activeRoom];
+            return updated;
+        });
+        setActiveRoom(null);
+    };
+
+    const handleDisbandGroup = () => {
+        socket.emit("disbandGroup", { roomId: activeRoom });
+        setGroupDetailsVisible(false);
+        showToast("Disband Group", "The group has been disbanded", "info");
+        setActiveChats(prev => {
+            const updated = { ...prev };
+            delete updated[activeRoom];
+            return updated;
+        });
+        setActiveRoom(null);
+    };
+
+    // Lắng nghe event "newGroupChat" để cập nhật chat list sau khi tạo nhóm
+    useEffect(() => {
+        if (!socket) return;
+        const onNewGroupChat = (data) => {
+            try {
+                const groupChat = JSON.parse(data);
+                setActiveChats(prev => ({
+                    ...prev,
+                    [groupChat.roomId]: {
+                        partner: groupChat.groupName,
+                        unread: 0,
+                        messages: [],
+                        isGroup: true,
+                    },
+                }));
+                showToast("Nhóm Chat", "Nhóm chat mới đã được tạo: " + groupChat.groupName, "success");
+            } catch (error) {
+                console.error("Error parsing newGroupChat:", error);
+            }
+        };
+        socket.on("newGroupChat", onNewGroupChat);
+        return () => {
+            socket.off("newGroupChat", onNewGroupChat);
+        };
+    }, [socket]);
+
     // Hàm tạo nhóm chat
     const handleCreateGroup = () => {
         if (!groupName) {
-            Alert.alert("Thông báo", "Vui lòng nhập tên nhóm");
+            showToast("Thông báo", "Vui lòng nhập tên nhóm", "error");
             return;
         }
         if (selectedMembers.length === 0) {
-            Alert.alert("Thông báo", "Chọn ít nhất 1 thành viên");
+            showToast("Thông báo", "Chọn ít nhất 1 thành viên", "error");
             return;
         }
-        // Emit event tạo nhóm; backend sẽ tự thêm owner từ socket (đã đăng ký)
         socket.emit("createGroupChat", { groupName, members: selectedMembers });
-        // Ở đây có thể thực hiện optimistic update để cập nhật chat list ngay lập tức nếu cần
         setGroupModalVisible(false);
         setGroupName("");
         setSelectedMembers([]);
@@ -299,14 +411,31 @@ const ChatScreen = () => {
                 sendMessage={sendMessageHandler}
                 message={message}
                 setMessage={setMessage}
-                handleDeleteMessage={(msgId, room) => Alert.alert("Delete", `Delete message ${msgId}`)}
+                handleDeleteMessage={(msgId, room) =>
+                    showToast("Delete", `Delete message ${msgId}`, "info")
+                }
                 handleChooseEmotion={handleChooseEmotion}
                 activeEmotionMsgId={activeEmotionMsgId}
                 setActiveEmotionMsgId={setActiveEmotionMsgId}
                 emotions={emotions}
                 getMessageId={getMessageId}
-                onGetGroupDetails={() => Alert.alert("Group Details", "Show group details")}
+                onGetGroupDetails={() =>
+                    activeChats[activeRoom] && activeChats[activeRoom].isGroup
+                        ? socket.emit("getGroupDetails", { roomId: activeRoom })
+                        : showToast("Thông báo", "This is not a group chat.", "info")
+                }
                 onBack={() => setActiveRoom(null)}
+                // Các props group details truyền xuống ChatContainer để render modal GroupDetails (nếu có)
+                groupDetailsVisible={groupDetailsVisible}
+                groupInfo={groupInfo}
+                handleRemoveGroupMember={handleRemoveGroupMember}
+                handleTransferGroupOwner={handleTransferGroupOwner}
+                handleAssignDeputy={handleAssignDeputy}
+                handleCancelDeputy={handleCancelDeputy}
+                handleAddGroupMember={handleAddGroupMember}
+                handleLeaveGroup={handleLeaveGroup}
+                handleDisbandGroup={handleDisbandGroup}
+                setGroupDetailsVisible={setGroupDetailsVisible}
             />
         );
     }
@@ -325,7 +454,10 @@ const ChatScreen = () => {
                         <Text style={styles.buttonText}>Đóng</Text>
                     </TouchableOpacity>
                 ) : (
-                    <TouchableOpacity style={styles.button} onPress={() => Alert.alert("Friend Modal", "Open friend modal")}>
+                    <TouchableOpacity
+                        style={styles.button}
+                        onPress={() => showToast("Friend Modal", "Open friend modal", "info")}
+                    >
                         <Text style={styles.buttonText}>Kết bạn</Text>
                     </TouchableOpacity>
                 )}
@@ -393,6 +525,7 @@ const ChatScreen = () => {
                     handleCreateGroup={handleCreateGroup}
                 />
             )}
+            <Toast />
         </View>
     );
 };
