@@ -10,6 +10,8 @@ import {
     StyleSheet,
     Alert,
 } from 'react-native';
+
+import EmojiSelector, { Categories } from 'react-native-emoji-selector';
 import GroupDetailsModal from './GroupDetailsModal';
 const ChatContainer = ({
     currentRoom,
@@ -173,7 +175,7 @@ const ChatContainer = ({
             {/* Header với nút Back */}
             <View style={styles.headerContainer}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Text style={styles.backButtonText}>Back</Text>
+                    <Text style={styles.backButtonText}>👈</Text>
                 </TouchableOpacity>
                 <Text style={styles.roomHeader}>Chat Room: {currentRoom}</Text>
                 <TouchableOpacity style={styles.groupDetailsButton} onPress={onGetGroupDetails}>
@@ -201,13 +203,30 @@ const ChatContainer = ({
                     <Text style={styles.secondaryButtonText}>Image</Text>
                 </TouchableOpacity>
             </View>
-            {showEmojiPicker && (
+            {/* {showEmojiPicker && (
                 <View style={styles.emojiPickerContainer}>
                     {emotions.map(em => (
                         <TouchableOpacity key={em.id} onPress={() => onEmojiClick(em.icon)} style={styles.emojiButton}>
                             <Text style={styles.emojiText}>{em.icon}</Text>
                         </TouchableOpacity>
                     ))}
+                </View>
+            )} */}
+            {showEmojiPicker && (
+                <View style={styles.emojiSelectorContainer}>
+                    <ScrollView
+                        showsVerticalScrollIndicator={true} // Hiển thị thanh cuộn dọc
+                        contentContainerStyle={{ padding: 5 }}
+                    >
+                        <EmojiSelector
+                            onEmojiSelected={(emoji) => {
+                                setMessage(prev => prev + emoji);
+                                setShowEmojiPicker(false);
+                            }}
+                            showSearchBar={true}
+                            category={Categories.all}
+                        />
+                    </ScrollView>
                 </View>
             )}
             {showImageUploader && (
@@ -318,5 +337,19 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         padding: 3,
         color: "#fff"
+    },
+    emojiSelectorContainer: {
+        position: 'absolute',
+        bottom: 60,   // Điều chỉnh khoảng cách từ dưới
+        right: 10,    // Căn sát bên phải
+        width: 250,   // Tăng chiều rộng
+        height: 300,  // Tăng chiều cao
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        elevation: 5,        // Shadow cho Android
+        shadowColor: '#000', // Shadow cho iOS
+        shadowOpacity: 0.3,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
     },
 });

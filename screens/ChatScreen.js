@@ -24,6 +24,7 @@ const emotions = [
     { id: 5, icon: "😡" },
 ];
 
+// Hàm tiện ích để lấy id của message dưới dạng string
 const getMessageId = (msg) => {
     if (msg._id) return msg._id.toString();
     if (msg.id) return msg.id.toString();
@@ -62,6 +63,26 @@ const ChatScreen = () => {
     // Các ref hỗ trợ
     const joinedRoomsRef = useRef(new Set());
     const processedUnreadMessagesRef = useRef(new Set());
+    // Dùng để lưu room hiện tại cho sự kiện "thread"
+    const currentRoomRef = useRef(activeRoom);
+    useEffect(() => { currentRoomRef.current = activeRoom; }, [activeRoom]);
+
+    // --- LOAD DỮ LIỆU activeChats từ AsyncStorage khi component mount ---
+    useEffect(() => {
+        AsyncStorage.getItem('activeChats')
+            .then(data => {
+                if (data) {
+                    setActiveChats(JSON.parse(data));
+                }
+            })
+            .catch(err => console.error("Error loading activeChats:", err));
+    }, []);
+
+    // --- LƯU activeChats vào AsyncStorage mỗi khi thay đổi ---
+    useEffect(() => {
+        AsyncStorage.setItem('activeChats', JSON.stringify(activeChats))
+            .catch(err => console.error("Error saving activeChats:", err));
+    }, [activeChats]);
 
     // Đăng ký username cho socket khi component mount
     useEffect(() => {
@@ -97,7 +118,7 @@ const ChatScreen = () => {
         };
     }, [socket]);
 
-    // Khi modal chi tiết nhóm đang mở, nếu có sự thay đổi (groupUpdated) thì refresh thông tin nhóm
+    // Nếu modal group details đang mở, tự động refresh thông tin nếu có cập nhật
     useEffect(() => {
         if (!socket) return;
         const onGroupUpdated = (data) => {
@@ -131,17 +152,17 @@ const ChatScreen = () => {
         }
     }, [searchFilter, accounts]);
 
-    // Lấy danh sách cuộc trò chuyện qua socket
+    // Lấy danh sách cuộc trò chuyện qua socket và tự động join tất cả các room
     useEffect(() => {
         if (!socket || !username) return;
         socket.emit("getUserConversations", username);
         const onUserConversations = (data) => {
             try {
                 const conversationData = JSON.parse(data);
-                let chats = {};
+                let chatsFromServer = {};
                 if (conversationData.privateChats) {
                     conversationData.privateChats.forEach(chat => {
-                        chats[chat.roomId] = {
+                        chatsFromServer[chat.roomId] = {
                             partner: chat.friend,
                             unread: 0,
                             messages: chat.messages || [],
@@ -150,7 +171,7 @@ const ChatScreen = () => {
                 }
                 if (conversationData.groupChats) {
                     conversationData.groupChats.forEach(chat => {
-                        chats[chat.roomId] = {
+                        chatsFromServer[chat.roomId] = {
                             partner: chat.groupName,
                             unread: 0,
                             messages: chat.messages || [],
@@ -158,7 +179,23 @@ const ChatScreen = () => {
                         };
                     });
                 }
-                setActiveChats(chats);
+                // Merge với activeChats đã có (nếu có tin chưa đọc)
+                const mergedChats = { ...chatsFromServer, ...activeChats };
+                Object.keys(chatsFromServer).forEach(room => {
+                    if (activeChats[room] && activeChats[room].unread > 0) {
+                        mergedChats[room].unread = activeChats[room].unread;
+                    }
+                });
+                setActiveChats(mergedChats);
+                AsyncStorage.setItem('activeChats', JSON.stringify(mergedChats))
+                    .catch(err => console.error("Error saving activeChats:", err));
+                // Auto join tất cả các room để nhận realtime tin nhắn và cập nhật unread
+                Object.keys(mergedChats).forEach(room => {
+                    if (!joinedRoomsRef.current.has(room)) {
+                        socket.emit("join", room);
+                        joinedRoomsRef.current.add(room);
+                    }
+                });
             } catch (error) {
                 console.error("Error parsing userConversations:", error);
             }
@@ -238,13 +275,37 @@ const ChatScreen = () => {
         };
     }, [socket]);
 
-    // *** Thêm sự kiện "thread" để realtime nhận tin nhắn mới (bao gồm group chat) ***
+    // Sự kiện "thread" để realtime nhận tin nhắn mới (bao gồm group chat)
     useEffect(() => {
         if (!socket) return;
         const onThread = (data) => {
             try {
                 const newMsg = JSON.parse(data);
-                setMessages(prev => [...prev, newMsg]);
+                setMessages(prev => {
+                    // Nếu tin nhắn đã tồn tại, không thêm nữa (tránh trùng lặp)
+                    if (prev.find(msg => getMessageId(msg) === getMessageId(newMsg))) {
+                        return prev;
+                    }
+                    return [...prev, newMsg];
+                });
+                // Nếu tin nhắn đến từ room khác với room hiện tại, tăng số tin chưa đọc cho room đó
+                if (newMsg.room !== currentRoomRef.current && newMsg && getMessageId(newMsg)) {
+                    setActiveChats(prev => {
+                        const updated = { ...prev };
+                        if (updated[newMsg.room]) {
+                            updated[newMsg.room].unread = (updated[newMsg.room].unread || 0) + 1;
+                        } else {
+                            updated[newMsg.room] = {
+                                partner: newMsg.room.includes("_") ? (newMsg.groupName || "Group Chat") : newMsg.name,
+                                unread: 1,
+                                isGroup: newMsg.room.includes("_"),
+                            };
+                        }
+                        AsyncStorage.setItem('activeChats', JSON.stringify(updated))
+                            .catch(err => console.error("Error saving activeChats:", err));
+                        return updated;
+                    });
+                }
             } catch (error) {
                 console.error("Error parsing thread:", error);
             }
@@ -255,21 +316,29 @@ const ChatScreen = () => {
         };
     }, [socket]);
 
-    // Hàm gửi tin nhắn
+    // Hàm gửi tin nhắn (không cập nhật state messages ở đây để tránh gửi đôi)
     const sendMessageHandler = (msgObj) => {
         if (!activeRoom) {
             showToast("Error", "Please select a chat first.", "error");
             return;
         }
         socket.emit("message", JSON.stringify(msgObj));
-        setMessages(prev => [...prev, msgObj]);
     };
 
-    // Khi bấm vào chat từ danh sách
+    // Khi bấm vào chat từ danh sách, chuyển room, reset tin nhắn, và đặt unread = 0 cho room đó
     const handleRoomClick = (room) => {
         setActiveRoom(room);
         socket.emit("join", room);
-        setMessages([]);
+        setMessages([]); // Reset tin nhắn cho room mới
+        setActiveChats(prev => {
+            const updated = { ...prev };
+            if (updated[room]) {
+                updated[room].unread = 0;
+            }
+            AsyncStorage.setItem('activeChats', JSON.stringify(updated))
+                .catch(err => console.error("Error saving activeChats:", err));
+            return updated;
+        });
     };
 
     // Khi bấm vào kết quả tìm kiếm người dùng
@@ -306,55 +375,61 @@ const ChatScreen = () => {
 
     // --- Các hàm quản lý Group Chat ---
     const handleRemoveGroupMember = (roomId, member) => {
-        socket.emit("removeGroupMember", { roomId, memberToRemove: member });
-        showToast("Remove Member", `Removed ${member}`, "info");
+        if (window.confirm(`Are you sure you want to remove ${member}?`)) {
+            socket.emit("removeGroupMember", { roomId, memberToRemove: member });
+        }
     };
 
     const handleTransferGroupOwner = (roomId, newOwner) => {
-        socket.emit("transferGroupOwner", { roomId, newOwner });
-        showToast("Transfer Ownership", `Ownership transferred to ${newOwner}`, "info");
+        if (window.confirm(`Are you sure you want to transfer ownership to ${newOwner}?`)) {
+            socket.emit("transferGroupOwner", { roomId, newOwner });
+        }
     };
 
     const handleAssignDeputy = (roomId, member) => {
-        socket.emit("assignDeputy", { roomId, member });
-        showToast("Assign Deputy", `Deputy assigned to ${member}`, "info");
+        if (window.confirm(`Assign deputy role to ${member}?`)) {
+            socket.emit("assignDeputy", { roomId, member });
+        }
     };
 
     const handleCancelDeputy = (roomId, member) => {
-        socket.emit("cancelDeputy", { roomId, member });
-        showToast("Cancel Deputy", `Deputy role cancelled for ${member}`, "info");
+        if (window.confirm(`Cancel deputy role for ${member}?`)) {
+            socket.emit("cancelDeputy", { roomId, member });
+        }
     };
 
     const handleAddGroupMember = (newMember) => {
         if (newMember.trim() === "") {
-            showToast("Thông báo", "Vui lòng nhập username của thành viên cần thêm", "error");
+            alert("Vui lòng nhập username của thành viên cần thêm");
             return;
         }
         socket.emit("addGroupMember", { roomId: activeRoom, newMember });
     };
 
     const handleLeaveGroup = () => {
-        socket.emit("leaveGroup", { roomId: activeRoom });
-        setGroupDetailsVisible(false);
-        showToast("Leave Group", "You have left the group", "info");
-        setActiveChats(prev => {
-            const updated = { ...prev };
-            delete updated[activeRoom];
-            return updated;
-        });
-        setActiveRoom(null);
+        if (window.confirm("Bạn có chắc muốn rời khỏi nhóm này?")) {
+            socket.emit("leaveGroup", { roomId: activeRoom });
+            setGroupDetailsVisible(false);
+            setActiveChats(prev => {
+                const updated = { ...prev };
+                delete updated[activeRoom];
+                return updated;
+            });
+            setActiveRoom(null);
+        }
     };
 
     const handleDisbandGroup = () => {
-        socket.emit("disbandGroup", { roomId: activeRoom });
-        setGroupDetailsVisible(false);
-        showToast("Disband Group", "The group has been disbanded", "info");
-        setActiveChats(prev => {
-            const updated = { ...prev };
-            delete updated[activeRoom];
-            return updated;
-        });
-        setActiveRoom(null);
+        if (window.confirm("Bạn có chắc muốn giải tán nhóm này?")) {
+            socket.emit("disbandGroup", { roomId: activeRoom });
+            setGroupDetailsVisible(false);
+            setActiveChats(prev => {
+                const updated = { ...prev };
+                delete updated[activeRoom];
+                return updated;
+            });
+            setActiveRoom(null);
+        }
     };
 
     // Lắng nghe event "newGroupChat" để cập nhật chat list sau khi tạo nhóm
@@ -363,15 +438,20 @@ const ChatScreen = () => {
         const onNewGroupChat = (data) => {
             try {
                 const groupChat = JSON.parse(data);
-                setActiveChats(prev => ({
-                    ...prev,
-                    [groupChat.roomId]: {
-                        partner: groupChat.groupName,
-                        unread: 0,
-                        messages: [],
-                        isGroup: true,
-                    },
-                }));
+                setActiveChats(prev => {
+                    const updated = {
+                        ...prev,
+                        [groupChat.roomId]: {
+                            partner: groupChat.groupName,
+                            unread: 0,
+                            messages: [],
+                            isGroup: true,
+                        },
+                    };
+                    AsyncStorage.setItem('activeChats', JSON.stringify(updated))
+                        .catch(err => console.error("Error saving activeChats:", err));
+                    return updated;
+                });
                 showToast("Nhóm Chat", "Nhóm chat mới đã được tạo: " + groupChat.groupName, "success");
             } catch (error) {
                 console.error("Error parsing newGroupChat:", error);
@@ -386,11 +466,11 @@ const ChatScreen = () => {
     // Hàm tạo nhóm chat
     const handleCreateGroup = () => {
         if (!groupName) {
-            showToast("Thông báo", "Vui lòng nhập tên nhóm", "error");
+            alert("Vui lòng nhập tên nhóm");
             return;
         }
         if (selectedMembers.length === 0) {
-            showToast("Thông báo", "Chọn ít nhất 1 thành viên", "error");
+            alert("Chọn ít nhất 1 thành viên");
             return;
         }
         socket.emit("createGroupChat", { groupName, members: selectedMembers });
@@ -425,6 +505,7 @@ const ChatScreen = () => {
                         : showToast("Thông báo", "This is not a group chat.", "info")
                 }
                 onBack={() => setActiveRoom(null)}
+
                 // Các props group details truyền xuống ChatContainer để render modal GroupDetails (nếu có)
                 groupDetailsVisible={groupDetailsVisible}
                 groupInfo={groupInfo}

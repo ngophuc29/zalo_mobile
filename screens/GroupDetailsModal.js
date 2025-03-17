@@ -30,7 +30,7 @@ const GroupDetailsModal = ({
             visible={true}
             onRequestClose={() => setGroupDetailsVisible(false)}
         >
-            <TouchableOpacity
+            <View
                 style={styles.overlay}
                 activeOpacity={1}
                 onPressOut={() => setGroupDetailsVisible(false)}
@@ -135,7 +135,7 @@ const GroupDetailsModal = ({
                         </View>
                     </ScrollView>
                 </View>
-            </TouchableOpacity>
+            </View>
         </Modal>
     );
 };
