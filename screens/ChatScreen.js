@@ -12,8 +12,8 @@ import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import io from 'socket.io-client';
 import ChatContainer from './ChatContainer';
+import FriendModal from './FriendModal';
 import GroupChatModal from './GroupChatModal';
-
 const socket = io("http://localhost:5000");
 
 const emotions = [
@@ -45,6 +45,8 @@ const ChatScreen = () => {
     // State liên quan đến chat
     const [username, setUsername] = useState(null);
     const [accounts, setAccounts] = useState([]);
+    const [friends, setFriends] = useState([]); // Danh sách bạn của user
+
     const [searchFilter, setSearchFilter] = useState('');
     const [filteredAccounts, setFilteredAccounts] = useState([]);
     const [activeChats, setActiveChats] = useState({});
@@ -52,6 +54,11 @@ const ChatScreen = () => {
     const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState('');
     const [activeEmotionMsgId, setActiveEmotionMsgId] = useState(null);
+
+
+    // State dành cho Friend Modal
+    const [friendModalVisible, setFriendModalVisible] = useState(false);
+    const [friendInput, setFriendInput] = useState("");
 
     // State dành cho Group Chat
     const [groupModalVisible, setGroupModalVisible] = useState(false);
@@ -91,9 +98,39 @@ const ChatScreen = () => {
                 if (storedUsername) {
                     setUsername(storedUsername);
                     socket.emit("registerUser", storedUsername);
+
+
+                    // Lấy danh sách bạn từ backend
+                    socket.emit("getFriends", storedUsername);
                 }
             })
             .catch(error => console.error("Error fetching username:", error));
+    }, []);
+
+    // Lắng nghe danh sách bạn
+    useEffect(() => {
+        const onFriendsList = (friendsList) => {
+            setFriends(friendsList);
+        };
+        socket.on("friendsList", onFriendsList);
+        return () => {
+            socket.off("friendsList", onFriendsList);
+        };
+    }, []);
+
+    // Lắng nghe kết quả gửi lời mời kết bạn
+    useEffect(() => {
+        const onAddFriendResult = (data) => {
+            if (data.success) {
+                showToast("Kết bạn", data.message, "success");
+            } else {
+                showToast("Kết bạn", data.message, "error");
+            }
+        };
+        socket.on("addFriendResult", onAddFriendResult);
+        return () => {
+            socket.off("addFriendResult", onAddFriendResult);
+        };
     }, []);
 
     // Lắng nghe event "groupDetailsResult" để cập nhật thông tin nhóm realtime
@@ -479,6 +516,15 @@ const ChatScreen = () => {
         setSelectedMembers([]);
     };
 
+    // Hàm xử lý gửi lời mời kết bạn qua socket
+    const handleAddFriend = (friendUsername) => {
+        if (!username) return;
+        socket.emit("addFriend", { myUsername: username, friendUsername });
+        // Sau khi gửi, có thể ẩn modal nếu muốn
+        setFriendModalVisible(false);
+        setFriendInput("");
+    };
+
     const chatList = Object.keys(activeChats).map(room => ({ room, ...activeChats[room] }));
     const isSearching = searchFilter.trim().length > 0;
 
@@ -535,12 +581,12 @@ const ChatScreen = () => {
                         <Text style={styles.buttonText}>Đóng</Text>
                     </TouchableOpacity>
                 ) : (
-                    <TouchableOpacity
-                        style={styles.button}
-                        onPress={() => showToast("Friend Modal", "Open friend modal", "info")}
-                    >
-                        <Text style={styles.buttonText}>Kết bạn</Text>
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.button}
+                            onPress={() => setFriendModalVisible(true)}
+                        >
+                            <Text style={styles.buttonText}>Kết bạn</Text>
+                        </TouchableOpacity>
                 )}
             </View>
             {isSearching ? (
@@ -606,6 +652,19 @@ const ChatScreen = () => {
                     handleCreateGroup={handleCreateGroup}
                 />
             )}
+
+            {friendModalVisible && (
+                <FriendModal
+                    friendInput={friendInput}
+                    setFriendInput={setFriendInput}
+                    accounts={accounts}
+                    myname={username}
+                    friends={friends}
+                    setFriendModalVisible={setFriendModalVisible}
+                    handleAddFriend={handleAddFriend}
+                />
+            )}
+
             <Toast />
         </View>
     );

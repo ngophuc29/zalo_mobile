@@ -1,4 +1,3 @@
-// Contacts.js
 import React, { useState, useEffect } from "react";
 import {
     View,
@@ -6,41 +5,56 @@ import {
     FlatList,
     TouchableOpacity,
     StyleSheet,
-    Alert
 } from "react-native";
 import io from "socket.io-client";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ConfirmModal from "./ConfirmModal"; // Import ConfirmModal
 
-const socket = io("http://localhost:5000"); // Thay đổi URL nếu cần
+// Lưu ý: Nếu bạn dùng thiết bị di động, hãy thay localhost bằng IP của máy chủ
+const socket = io("http://localhost:5000");
 
 const Contacts = () => {
     const [friendRequests, setFriendRequests] = useState([]);
     const [friends, setFriends] = useState([]);
     const [myUsername, setMyUsername] = useState("Guest");
 
-    // Lấy username từ AsyncStorage thay cho localStorage
+    // State cho modal xác nhận xóa bạn
+    const [confirmVisible, setConfirmVisible] = useState(false);
+    const [friendToRemove, setFriendToRemove] = useState(null);
+
+    // Lấy username từ AsyncStorage
     useEffect(() => {
         AsyncStorage.getItem("username").then((username) => {
             if (username) setMyUsername(username);
         });
     }, []);
 
+    // Đăng ký các sự kiện socket liên quan đến Friend Functionality
     useEffect(() => {
         if (!myUsername) return;
+
+        // Yêu cầu lấy danh sách lời mời và danh sách bạn bè
         socket.emit("getFriendRequests", myUsername);
         socket.emit("getFriends", myUsername);
 
-        socket.on("friendRequests", (data) => setFriendRequests(data));
-        socket.on("friendsList", (data) => setFriends(data));
+        socket.on("friendRequests", (data) => {
+            console.log("Received friendRequests:", data);
+            setFriendRequests(data);
+        });
+        socket.on("friendsList", (data) => {
+            console.log("Received friendsList:", data);
+            setFriends(data);
+        });
 
+        // Xử lý kết quả trả về từ các hành động friend
         socket.on("respondFriendRequestResult", (data) => {
-            Alert.alert("Thông báo", data.message);
+            console.log("Respond friend request result:", data.message);
+            // Sau khi phản hồi lời mời, cập nhật lại danh sách
             socket.emit("getFriendRequests", myUsername);
             socket.emit("getFriends", myUsername);
         });
-
         socket.on("cancelFriendResult", (data) => {
-            Alert.alert("Thông báo", data.message);
+            console.log("Cancel friend result:", data.message);
             socket.emit("getFriends", myUsername);
         });
 
@@ -52,21 +66,35 @@ const Contacts = () => {
         };
     }, [myUsername]);
 
+    // Xử lý phản hồi lời mời kết bạn
     const handleRespond = (requestId, action) => {
+        console.log("Responding with:", { requestId, action });
         socket.emit("respondFriendRequest", { requestId, action });
     };
 
+    // Khi nhấn "Xóa bạn", mở modal xác nhận
     const handleRemoveFriend = (friendUsername) => {
-        Alert.alert(
-            "Xác nhận",
-            `Bạn có chắc muốn xóa ${friendUsername} khỏi danh sách bạn bè không?`,
-            [
-                { text: "Hủy", style: "cancel" },
-                { text: "Đồng ý", onPress: () => socket.emit("cancelFriend", { myUsername, friendUsername }) }
-            ]
-        );
+        setFriendToRemove(friendUsername);
+        setConfirmVisible(true);
     };
 
+    // Khi người dùng xác nhận xóa bạn
+    const confirmRemoveFriend = () => {
+        if (friendToRemove) {
+            console.log("Removing friend:", { myUsername, friendUsername: friendToRemove });
+            socket.emit("cancelFriend", { myUsername, friendUsername: friendToRemove });
+        }
+        setConfirmVisible(false);
+        setFriendToRemove(null);
+    };
+
+    // Khi người dùng hủy hành động xóa bạn
+    const cancelRemoveFriend = () => {
+        setConfirmVisible(false);
+        setFriendToRemove(null);
+    };
+
+    // Render mỗi lời mời kết bạn
     const renderFriendRequest = ({ item }) => (
         <View style={styles.requestItem}>
             <Text style={styles.requestText}>Từ: {item.from}</Text>
@@ -87,6 +115,7 @@ const Contacts = () => {
         </View>
     );
 
+    // Render mỗi bạn bè
     const renderFriend = ({ item }) => (
         <View style={styles.friendItem}>
             <Text style={styles.friendText}>{item}</Text>
@@ -103,7 +132,7 @@ const Contacts = () => {
         <View style={styles.container}>
             <Text style={styles.title}>Danh Bạ</Text>
 
-            {/* Lời mời kết bạn */}
+            {/* Phần lời mời kết bạn */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Lời mời kết bạn</Text>
                 {friendRequests.length === 0 ? (
@@ -117,7 +146,7 @@ const Contacts = () => {
                 )}
             </View>
 
-            {/* Danh sách bạn bè */}
+            {/* Phần danh sách bạn bè */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Danh sách bạn bè</Text>
                 {friends.length === 0 ? (
@@ -130,6 +159,14 @@ const Contacts = () => {
                     />
                 )}
             </View>
+
+            {/* Modal xác nhận xóa bạn */}
+            <ConfirmModal
+                visible={confirmVisible}
+                message={`Bạn có chắc muốn xóa ${friendToRemove} khỏi danh sách bạn bè không?`}
+                onConfirm={confirmRemoveFriend}
+                onCancel={cancelRemoveFriend}
+            />
         </View>
     );
 };
