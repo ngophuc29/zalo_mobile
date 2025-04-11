@@ -93,19 +93,25 @@ const ChatScreen = () => {
 
     // Đăng ký username cho socket khi component mount
     useEffect(() => {
-        AsyncStorage.getItem('username')
-            .then(storedUsername => {
-                if (storedUsername) {
-                    setUsername(storedUsername);
-                    socket.emit("registerUser", storedUsername);
+        const fetchAndRegisterUser = async () => {
+            try {
+                const userStr = await AsyncStorage.getItem('user');
+                const stored = userStr ? JSON.parse(userStr) : {};
+                const username =   stored.username;
 
-
-                    // Lấy danh sách bạn từ backend
-                    socket.emit("getFriends", storedUsername);
+                if (username) {
+                    setUsername(username);
+                    socket.emit("registerUser", username);
+                    socket.emit("getFriends", username);
                 }
-            })
-            .catch(error => console.error("Error fetching username:", error));
+            } catch (error) {
+                console.error("Lỗi khi xử lý username:", error);
+            }
+        };
+
+        fetchAndRegisterUser();
     }, []);
+
 
     // Lắng nghe danh sách bạn
     useEffect(() => {

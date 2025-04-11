@@ -1,19 +1,13 @@
 // LoginScreen.js
 import React, { useState } from 'react';
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    StyleSheet,
-    Alert,
-    ActivityIndicator,
+    View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 
-const LoginScreen = () => {
+const LoginScreen = ({ setIsLoggedIn }) => {
     const [account, setAccount] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -21,7 +15,7 @@ const LoginScreen = () => {
 
     const handleLogin = async () => {
         if (!account || !password) {
-            alert('Lỗi', 'Vui lòng nhập đầy đủ tài khoản và mật khẩu!');
+            Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ tài khoản và mật khẩu!');
             return;
         }
 
@@ -37,17 +31,16 @@ const LoginScreen = () => {
             });
 
             if (response.status === 200) {
-                const { token, username } = response.data;
+                const { token } = response.data;
 
-                // ✅ Lưu toàn bộ thông tin user dưới dạng JSON string
                 await AsyncStorage.setItem('token', token);
-                await AsyncStorage.setItem('user', JSON.stringify(response.data)); // ví dụ gồm: username, email, userId...
+                await AsyncStorage.setItem('user', JSON.stringify(response.data));
 
-                alert('Thành công', 'Đăng nhập thành công');
-                navigation.navigate('Main');
+                Alert.alert('Thành công', 'Đăng nhập thành công');
+                setIsLoggedIn(true); // ✅ Điều khiển App.js chuyển sang màn hình chính
             }
         } catch (error) {
-            alert(
+            Alert.alert(
                 'Đăng nhập thất bại',
                 'Sai thông tin đăng nhập: ' + (error.response?.data?.message || 'Lỗi server')
             );
@@ -55,7 +48,6 @@ const LoginScreen = () => {
 
         setLoading(false);
     };
-
 
     return (
         <View style={styles.container}>
@@ -98,6 +90,7 @@ const LoginScreen = () => {
 };
 
 export default LoginScreen;
+
 
 const styles = StyleSheet.create({
     container: {

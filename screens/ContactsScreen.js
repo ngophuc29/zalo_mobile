@@ -24,10 +24,21 @@ const Contacts = () => {
 
     // Lấy username từ AsyncStorage
     useEffect(() => {
-        AsyncStorage.getItem("username").then((username) => {
-            if (username) setMyUsername(username);
-        });
+        const fetchUsernameFromUser = async () => {
+            try {
+                const userStr = await AsyncStorage.getItem('user');
+                const user = userStr ? JSON.parse(userStr) : {};
+                if (user.username) {
+                    setMyUsername(user.username);
+                }
+            } catch (error) {
+                console.error("Lỗi khi lấy username từ user:", error);
+            }
+        };
+
+        fetchUsernameFromUser();
     }, []);
+
 
     // Đăng ký các sự kiện socket liên quan đến Friend Functionality
     useEffect(() => {

@@ -9,7 +9,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 const API_BASE = 'http://localhost:5000/api/accounts';
 
-const UserScreen = ({ navigation, myname }) => {
+const UserScreen = ({ navigation, myname ,setIsLoggedIn}) => {
     const [userInfo, setUserInfo] = useState({});
     const [isUpdateModalVisible, setUpdateModalVisible] = useState(false);
     const [isPasswordModalVisible, setPasswordModalVisible] = useState(false);
@@ -109,10 +109,7 @@ const UserScreen = ({ navigation, myname }) => {
     };
     const handleLogout = async () => {
         await AsyncStorage.removeItem('user');
-        navigation.reset({
-            index: 0,
-            routes: [{ name: 'Auth' }], // Điều hướng về Auth stack
-        });
+        setIsLoggedIn(false); // quay lại màn hình login
     };
     return (
         <ScrollView contentContainerStyle={styles.container}>

@@ -1,3 +1,4 @@
+// App.js
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -12,49 +13,51 @@ import UserScreen from './screens/UserScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const BottomTabs = () => {
-  return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Chat" component={ChatScreen} />
-      <Tab.Screen name="Contacts" component={ContactsScreen} />
-      <Tab.Screen name="User" component={UserScreen} />
-    </Tab.Navigator>
-  );
-};
+const BottomTabs = ({ setIsLoggedIn }) => (
+  <Tab.Navigator screenOptions={{ headerShown: false }}>
+    <Tab.Screen name="Chat" component={ChatScreen} />
+    <Tab.Screen name="Contacts" component={ContactsScreen} />
+    <Tab.Screen name="User">
+      {(props) => <UserScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+    </Tab.Screen>
+  </Tab.Navigator>
+);
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(null); // Khởi tạo là null để chờ kiểm tra
+  const [isLoggedIn, setIsLoggedIn] = useState(null);
 
   useEffect(() => {
     const checkLoginStatus = async () => {
-      const userStr = await AsyncStorage.getItem('user');
-      if (userStr) {
-        try {
+      try {
+        const userStr = await AsyncStorage.getItem('user');
+        if (userStr) {
           const user = JSON.parse(userStr);
           setIsLoggedIn(!!user?.username);
-        } catch (err) {
-          console.error("Lỗi parse user trong App.js:", err);
+        } else {
           setIsLoggedIn(false);
         }
-      } else {
+      } catch (error) {
+        console.error('Lỗi kiểm tra login:', error);
         setIsLoggedIn(false);
       }
     };
-    
+
     checkLoginStatus();
   }, []);
 
-  if (isLoggedIn === null) {
-    return null; // Hoặc màn hình loading
-  }
+  if (isLoggedIn === null) return null; // loading
 
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isLoggedIn ? (
-          <Stack.Screen name="Main" component={BottomTabs} />
+          <Stack.Screen name="Main">
+            {(props) => <BottomTabs {...props} setIsLoggedIn={setIsLoggedIn} />}
+          </Stack.Screen>
         ) : (
-          <Stack.Screen name="Auth" component={AuthStack} />
+          <Stack.Screen name="Auth">
+            {(props) => <AuthStack {...props} setIsLoggedIn={setIsLoggedIn} />}
+          </Stack.Screen>
         )}
       </Stack.Navigator>
     </NavigationContainer>
