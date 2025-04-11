@@ -1,0 +1,22 @@
+ 
+import React from 'react';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import LoginScreen from './LoginScreen';
+import RegisterScreen from './RegisterScreen';
+import VerifyOtpScreen from './VerifyOtpScreen';
+import RegisterStep2Screen from './RegisterStep2Screen';
+import ResetPasswordScreen from './ResetPasswordScreen';
+
+const Stack = createNativeStackNavigator();
+
+const AuthStack = () => (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="VerifyOtp" component={VerifyOtpScreen} />
+        <Stack.Screen name="RegisterStep2" component={RegisterStep2Screen} />
+        <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+    </Stack.Navigator>
+);
+
+export default AuthStack;

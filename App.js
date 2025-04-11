@@ -1,11 +1,10 @@
-// App.js
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import LoginRegister from './screens/LoginRegister';
+import AuthStack from './screens/AuthStack';
 import ChatScreen from './screens/ChatScreen';
 import ContactsScreen from './screens/ContactsScreen';
 import UserScreen from './screens/UserScreen';
@@ -24,34 +23,38 @@ const BottomTabs = () => {
 };
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(null); // Khởi tạo là null để chờ kiểm tra
 
-  // Kiểm tra AsyncStorage để xem người dùng đã đăng nhập chưa
   useEffect(() => {
-    AsyncStorage.getItem('username').then(username => {
-      if (username) {
-        setIsLoggedIn(true);
+    const checkLoginStatus = async () => {
+      const userStr = await AsyncStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          setIsLoggedIn(!!user?.username);
+        } catch (err) {
+          console.error("Lỗi parse user trong App.js:", err);
+          setIsLoggedIn(false);
+        }
+      } else {
+        setIsLoggedIn(false);
       }
-    });
+    };
+    
+    checkLoginStatus();
   }, []);
+
+  if (isLoggedIn === null) {
+    return null; // Hoặc màn hình loading
+  }
 
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isLoggedIn ? (
-          // Khi đã đăng nhập, hiển thị giao diện bottom navigation
-          <Stack.Screen
-            name="Main"
-            component={BottomTabs}
-            options={{ headerShown: false }}
-          />
+          <Stack.Screen name="Main" component={BottomTabs} />
         ) : (
-          // Khi chưa đăng nhập, hiển thị trang đăng nhập/đăng ký
-          <Stack.Screen
-            name="LoginRegister"
-            component={LoginRegister}
-            options={{ headerShown: false }}
-          />
+          <Stack.Screen name="Auth" component={AuthStack} />
         )}
       </Stack.Navigator>
     </NavigationContainer>
