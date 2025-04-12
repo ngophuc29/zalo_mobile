@@ -1,4 +1,5 @@
-import React from "react";
+// FriendModal.js
+import React, { useState } from "react";
 import {
     Modal,
     View,
@@ -7,7 +8,11 @@ import {
     TouchableOpacity,
     FlatList,
     StyleSheet,
+    ActivityIndicator,
 } from "react-native";
+import Toast from "react-native-toast-message";
+import { io } from "socket.io-client";
+const socket = io("http://localhost:5000");
 
 const FriendModal = ({
     friendInput,
@@ -16,8 +21,42 @@ const FriendModal = ({
     myname,
     friends,
     setFriendModalVisible,
-    handleAddFriend,
+    handleAddFriend, // Nếu có logic bổ sung, bạn có thể tích hợp trong hàm này
 }) => {
+    const [loadingFriend, setLoadingFriend] = useState(null);
+
+    // const addFriendHandler = async (username) => {
+    //     setLoadingFriend(username);
+    //     // Gửi sự kiện addFriend đến server
+    //     socket.emit("addFriend", { myUsername: myname, friendUsername: username });
+    //     await handleAddFriend(username);
+    //     setLoadingFriend(null);
+
+    //     Toast.show({
+    //         type: "success",
+    //         text1: "Thành công",
+    //         text2: "Bạn đã gửi lời mời kết bạn 👋",
+    //     });
+    // };
+    const addFriendHandler = async (username) => {
+        setLoadingFriend(username);
+        await handleAddFriend(username); // để bên ngoài emit
+        setLoadingFriend(null);
+
+        Toast.show({
+            type: "success",
+            text1: "Thành công",
+            text2: "Bạn đã gửi lời mời kết bạn 👋",
+        });
+    };
+
+    const filteredAccounts = accounts.filter(
+        (acc) =>
+            acc.username.toLowerCase().includes(friendInput.toLowerCase()) &&
+            acc.username !== myname &&
+            !friends.includes(acc.username)
+    );
+
     return (
         <Modal
             transparent
@@ -40,12 +79,7 @@ const FriendModal = ({
                         placeholder="Tìm kiếm user..."
                     />
                     <FlatList
-                        data={accounts.filter(
-                            (acc) =>
-                                acc.username.toLowerCase().includes(friendInput.toLowerCase()) &&
-                                acc.username !== myname &&
-                                !friends.includes(acc.username)
-                        )}
+                        data={filteredAccounts}
                         keyExtractor={(item) => item.username}
                         renderItem={({ item }) => (
                             <View style={styles.listItem}>
@@ -54,9 +88,14 @@ const FriendModal = ({
                                 </Text>
                                 <TouchableOpacity
                                     style={styles.addButton}
-                                    onPress={() => handleAddFriend(item.username)}
+                                    onPress={() => addFriendHandler(item.username)}
+                                    disabled={loadingFriend === item.username}
                                 >
-                                    <Text style={styles.addButtonText}>Kết bạn</Text>
+                                    {loadingFriend === item.username ? (
+                                        <ActivityIndicator color="#fff" />
+                                    ) : (
+                                        <Text style={styles.addButtonText}>Kết bạn</Text>
+                                    )}
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -92,7 +131,7 @@ const styles = StyleSheet.create({
         fontWeight: "bold",
     },
     closeButton: {
-        fontSize: 22,
+        fontSize: 24,
         fontWeight: "bold",
     },
     input: {

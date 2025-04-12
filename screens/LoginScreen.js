@@ -6,7 +6,7 @@ import {
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-
+import Toast from 'react-native-toast-message'; 
 const LoginScreen = ({ setIsLoggedIn }) => {
     const [account, setAccount] = useState('');
     const [password, setPassword] = useState('');
@@ -36,14 +36,22 @@ const LoginScreen = ({ setIsLoggedIn }) => {
                 await AsyncStorage.setItem('token', token);
                 await AsyncStorage.setItem('user', JSON.stringify(response.data));
 
-                Alert.alert('Thành công', 'Đăng nhập thành công');
+               
+
+                Toast.show({
+                    type: 'success', // 'success' | 'error' | 'info'
+                    text1: 'Thành công',
+                    text2: 'Đăng nhập thành công👋',
+                });
+
                 setIsLoggedIn(true); // ✅ Điều khiển App.js chuyển sang màn hình chính
             }
         } catch (error) {
-            Alert.alert(
-                'Đăng nhập thất bại',
-                'Sai thông tin đăng nhập: ' + (error.response?.data?.message || 'Lỗi server')
-            );
+            Toast.show({
+                type: 'error', // 'success' | 'error' | 'info'
+                text1: 'Thất bại',
+                text2: 'Đăng nhập thất bại 👋',
+            });
         }
 
         setLoading(false);

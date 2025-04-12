@@ -9,6 +9,7 @@ import AuthStack from './screens/AuthStack';
 import ChatScreen from './screens/ChatScreen';
 import ContactsScreen from './screens/ContactsScreen';
 import UserScreen from './screens/UserScreen';
+import Toast from 'react-native-toast-message';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -60,6 +61,7 @@ export default function App() {
           </Stack.Screen>
         )}
       </Stack.Navigator>
+      <Toast />
     </NavigationContainer>
   );
 }
