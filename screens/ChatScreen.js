@@ -819,9 +819,11 @@ const ChatScreen = () => {
                     friends={friends}
                     setFriendModalVisible={setFriendModalVisible}
                     handleAddFriend={handleAddFriend}
-                    // Bạn có thể bổ sung thêm các props về friendRequests, requestedFriends và handleRespondToFriendRequest nếu cần xử lý modal lời mời
-                    friendRequests={friendRequests}
+                    handleWithdrawFriendRequest={handleWithdrawFriendRequest}
                     requestedFriends={requestedFriends}
+                    setRequestedFriends={setRequestedFriends}
+                    friendRequests={friendRequests}
+                    setFriendRequests={setFriendRequests}
                     handleRespondToFriendRequest={handleRespondToFriendRequest}
                 />
             )}
