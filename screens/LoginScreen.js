@@ -15,7 +15,12 @@ const LoginScreen = ({ setIsLoggedIn }) => {
 
     const handleLogin = async () => {
         if (!account || !password) {
-            Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ tài khoản và mật khẩu!');
+            // Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ tài khoản và mật khẩu!');
+            Toast.show({
+                type: 'error', // 'success' | 'error' | 'info'
+                text1: 'Lỗi',
+                text2: 'Vui lòng nhập đầy đủ tài khoản và mật khẩu!👋',
+            });
             return;
         }
 

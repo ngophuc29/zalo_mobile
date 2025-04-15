@@ -6,12 +6,12 @@ import {
     TextInput,
     TouchableOpacity,
     StyleSheet,
-    Alert,
     ActivityIndicator,
 } from 'react-native';
 import axios from 'axios';
 import { useNavigation } from '@react-navigation/native';
-
+ 
+import Toast from 'react-native-toast-message';
 const RegisterScreen = () => {
     const [email, setEmail] = useState('');
     const [emailRegistered, setEmailRegistered] = useState(false);
@@ -26,25 +26,40 @@ const RegisterScreen = () => {
 
     // Hàm gọi API kiểm tra email khi mất focus
     const handleEmailBlur = async () => {
-        if (!email || !isValidEmailFormat(email)) return;
+        if (!email || !isValidEmailFormat(email)) {
+            Toast.show({
+                type: 'error', // 'success' | 'error' | 'info'
+                text2: 'Email nhập sai định dạng👋',
+            });
+            return;
+        }
         try {
             const response = await axios.get('http://localhost:5000/api/accounts/check-email', {
                 params: { email },
             });
             if (response.data.exists) {
                 setEmailRegistered(true);
-                alert('Lỗi', 'Email đã tồn tại trên hệ thống');
+                Toast.show({
+                    type: 'error', // 'success' | 'error' | 'info'
+                    text2: 'Email đã tồn tại trên hệ thống.👋',
+                });
             } else {
                 setEmailRegistered(false);
             }
         } catch (error) {
-            alert('Lỗi', 'Lỗi kiểm tra email');
+            Toast.show({
+                type: 'error', // 'success' | 'error' | 'info'
+                text2: 'Lỗi kiểm tra email👋',
+            });
         }
     };
 
     const handleSendOtp = async () => {
         if (emailRegistered) {
-            alert('Lỗi', 'Email đã được đăng ký. Vui lòng nhập email khác.');
+            Toast.show({
+                type: 'error', // 'success' | 'error' | 'info'
+                text2: 'Email đã được đăng ký. Vui lòng nhập email khác.👋',
+            });
             return;
         }
 
@@ -52,11 +67,18 @@ const RegisterScreen = () => {
         try {
             const response = await axios.post('http://localhost:5000/api/accounts/register-step1', { email });
             if (response.status === 200) {
-                alert('Thành công', 'OTP đã được gửi tới email của bạn. Vui lòng kiểm tra.');
+                // Thay alert bằng Toast cho thông báo thành công
+                Toast.show({
+                    type: 'success',
+                    text2: 'OTP đã được gửi tới email của bạn. Vui lòng kiểm tra.',
+                });
                 navigation.navigate('VerifyOtp', { email, type: 'new' });
             }
         } catch (error) {
-            alert('Lỗi', error.response?.data?.message || 'Lỗi server');
+            Toast.show({
+                type: 'error',
+                text2: error.response?.data?.message || 'Lỗi server',
+            });
         }
         setLoading(false);
     };
@@ -90,6 +112,7 @@ const RegisterScreen = () => {
                     </Text>
                 </View>
             </View>
+             
         </View>
     );
 };

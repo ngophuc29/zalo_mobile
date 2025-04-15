@@ -1,4 +1,3 @@
-// RegisterStep2Screen.js
 import React, { useState } from 'react';
 import {
     View,
@@ -7,13 +6,14 @@ import {
     TouchableOpacity,
     StyleSheet,
     Image,
-    Alert,
     ActivityIndicator,
     ScrollView,
 } from 'react-native';
 import axios from 'axios';
 import { useNavigation, useRoute } from '@react-navigation/native';
-// Nếu sử dụng react-native-image-picker, import thư viện tại đây.
+import { launchImageLibrary } from 'react-native-image-picker';
+import Toast from 'react-native-toast-message';
+import dayjs from 'dayjs';
 
 const RegisterStep2Screen = () => {
     const route = useRoute();
@@ -28,22 +28,76 @@ const RegisterStep2Screen = () => {
     const [image, setImage] = useState(null);
     const [loading, setLoading] = useState(false);
 
-    // Ví dụ giả lập chọn ảnh (bạn cần tích hợp thư viện image picker để chọn ảnh từ thiết bị)
-    const handleSelectImage = () => {
-        // Đây chỉ là ví dụ; thay thế bằng hàm từ image picker
-        // Ví dụ: sử dụng launchImageLibrary từ react-native-image-picker
-        // Sau khi chọn ảnh, setImage(fileUri)
-        alert('Chọn ảnh', 'Tích hợp image picker ở đây');
+    const apiUrl = 'http://localhost:5000/api'; // đổi khi test
+
+    const isOldEnough = (birth) => {
+        const age = dayjs().diff(dayjs(birth), 'year');
+        return age >= 13;
+    };
+
+    const showToast = (type, text) => {
+        Toast.show({
+            type,
+            text1: text,
+            position: 'top',
+        });
+    };
+
+    const handleSelectImage = async () => {
+        launchImageLibrary(
+            {
+                mediaType: 'photo',
+                includeBase64: true,
+                quality: 0.5,
+            },
+            (response) => {
+                if (response.didCancel) return;
+
+                if (response.errorCode) {
+                    showToast('error', 'Lỗi chọn ảnh');
+                    return;
+                }
+
+                const asset = response.assets?.[0];
+                if (asset?.base64) {
+                    const base64Image = `data:${asset.type};base64,${asset.base64}`;
+                    setImage(base64Image);
+                }
+            }
+        );
     };
 
     const handleRegisterStep2 = async () => {
-        if (!username || !password || !fullname || !phone) {
-            alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin bắt buộc');
+        if (!username || !password || !fullname || !phone || !birthday) {
+            showToast('error', 'Vui lòng nhập đầy đủ thông tin');
             return;
         }
+
+        if (!isOldEnough(birthday)) {
+            showToast('error', 'Bạn phải từ 13 tuổi trở lên');
+            return;
+        }
+
         setLoading(true);
         try {
-            const apiUrl = 'http://localhost:5000/api';
+            const usernameRes = await axios.get(`${apiUrl}/accounts/check-username`, {
+                params: { username },
+            });
+            if (usernameRes.data.exists) {
+                showToast('error', 'Tên đăng nhập đã tồn tại');
+                setLoading(false);
+                return;
+            }
+
+            const phoneRes = await axios.get(`${apiUrl}/accounts/check-phone`, {
+                params: { phone },
+            });
+            if (phoneRes.data.exists) {
+                showToast('error', 'Số điện thoại đã được sử dụng');
+                setLoading(false);
+                return;
+            }
+
             const response = await axios.post(`${apiUrl}/accounts/register-step2`, {
                 username,
                 password,
@@ -51,14 +105,17 @@ const RegisterStep2Screen = () => {
                 email,
                 birthday,
                 fullname,
-                image, // image có thể là URI hoặc dữ liệu base64 tùy theo backend yêu cầu
+                image: image || undefined,
             });
+
             if (response.status === 201) {
-                alert('Thành công', 'Đăng ký thành công!');
-                navigation.navigate('Login');
+                showToast('success', 'Đăng ký thành công!');
+                setTimeout(() => {
+                    navigation.navigate('Login');
+                }, 1000);
             }
         } catch (error) {
-            alert('Lỗi', error.response?.data?.message || 'Lỗi server');
+            showToast('error', error.response?.data?.message || 'Đã xảy ra lỗi.');
         }
         setLoading(false);
     };
@@ -67,6 +124,7 @@ const RegisterStep2Screen = () => {
         <ScrollView contentContainerStyle={styles.container}>
             <View style={styles.card}>
                 <Text style={styles.title}>Đăng Ký Bước 2</Text>
+
                 <TextInput
                     style={styles.input}
                     placeholder="Tên đăng nhập"
@@ -99,16 +157,20 @@ const RegisterStep2Screen = () => {
                     value={birthday}
                     onChangeText={setBirthday}
                 />
+
                 <TouchableOpacity style={styles.imageButton} onPress={handleSelectImage}>
                     <Text style={styles.imageButtonText}>Chọn ảnh đại diện</Text>
                 </TouchableOpacity>
+
                 {image && (
                     <Image source={{ uri: image }} style={styles.avatar} />
                 )}
+
                 <TouchableOpacity style={styles.button} onPress={handleRegisterStep2} disabled={loading}>
                     {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Hoàn tất Đăng ký</Text>}
                 </TouchableOpacity>
             </View>
+            <Toast />
         </ScrollView>
     );
 };

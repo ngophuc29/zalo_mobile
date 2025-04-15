@@ -1,4 +1,3 @@
-// ChatContainer.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
@@ -10,9 +9,11 @@ import {
     StyleSheet,
     Alert,
 } from 'react-native';
-
 import EmojiSelector, { Categories } from 'react-native-emoji-selector';
 import GroupDetailsModal from './GroupDetailsModal';
+import { Video } from 'expo-av';
+import FileUploaderMobile from './FileUploaderMobile';
+import ImageUploaderMobile from './ImageUploaderMobile';
 const ChatContainer = ({
     currentRoom,
     messages,
@@ -21,10 +22,10 @@ const ChatContainer = ({
     message,
     setMessage,
     handleDeleteMessage,
-    handleChooseEmotion, // Hàm này được truyền từ ChatScreen và sẽ emit "emotion" lên backend
+    handleChooseEmotion,
     activeEmotionMsgId,
     setActiveEmotionMsgId,
-    emotions, // Ví dụ: [{ id: 1, icon: "❤️" }, ...]
+    emotions,
     getMessageId,
     onGetGroupDetails,
     onBack,
@@ -43,6 +44,7 @@ const ChatContainer = ({
 }) => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showImageUploader, setShowImageUploader] = useState(false);
+    const [showFileUploader, setShowFileUploader] = useState(false);
     const scrollViewRef = useRef(null);
 
     useEffect(() => {
@@ -69,6 +71,7 @@ const ChatContainer = ({
         setShowEmojiPicker(false);
     };
 
+    // Hàm khi upload ảnh thành công
     const handleImageUploadSuccess = (imageUrl) => {
         const fileMessage = {
             id: Date.now(),
@@ -76,12 +79,28 @@ const ChatContainer = ({
             message: '',
             room: currentRoom,
             fileUrl: imageUrl,
+            fileType: 'image',
         };
         sendMessage(fileMessage);
         setShowImageUploader(false);
     };
 
-    // Wrap handleChooseEmotion để thêm log nếu cần
+    // Hàm khi upload file thành công (bao gồm video hoặc file khác)
+    const handleFileUploadSuccess = (fileData) => {
+        const fileMessage = {
+            id: Date.now(),
+            name: myname,
+            message: '',
+            room: currentRoom,
+            fileUrl: fileData.url,
+            fileType: fileData.type, // Ví dụ: 'video', 'pdf', 'doc'...
+            fileName: fileData.name,
+            fileSize: fileData.size,
+        };
+        sendMessage(fileMessage);
+        setShowFileUploader(false);
+    };
+
     const onChooseEmotion = (msgId, emotionId) => {
         console.log("Chosen emotion:", { msgId, emotionId });
         handleChooseEmotion(msgId, emotionId);
@@ -127,8 +146,15 @@ const ChatContainer = ({
                     {msg.name !== myname && <Text style={styles.senderName}>{msg.name}</Text>}
                     {msg.message ? <Text style={styles.messageText}>{msg.message}</Text> : null}
                     {msg.fileUrl ? (
-                        /\.(jpg|jpeg|png|gif)$/i.test(msg.fileUrl) ? (
+                        /\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
                             <Image source={{ uri: msg.fileUrl }} style={styles.image} resizeMode="cover" />
+                        ) : /\.(mp4|webm|ogg)$/i.test(msg.fileUrl) ? (
+                            <Video
+                                source={{ uri: msg.fileUrl }}
+                                style={styles.video}
+                                useNativeControls
+                                resizeMode="contain"
+                            />
                         ) : (
                             <Text style={styles.downloadLink}>Download File</Text>
                         )
@@ -172,7 +198,7 @@ const ChatContainer = ({
 
     return (
         <View style={styles.container}>
-            {/* Header với nút Back */}
+            {/* Header với nút Back và Group Details */}
             <View style={styles.headerContainer}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
                     <Text style={styles.backButtonText}>👈</Text>
@@ -182,9 +208,11 @@ const ChatContainer = ({
                     <Text style={styles.groupDetailsButtonText}>Group Details</Text>
                 </TouchableOpacity>
             </View>
+
             <ScrollView style={styles.messageContainer} ref={scrollViewRef}>
                 {messages.map(msg => renderMessageItem(msg))}
             </ScrollView>
+
             <View style={styles.inputContainer}>
                 <TextInput
                     style={styles.input}
@@ -202,22 +230,14 @@ const ChatContainer = ({
                 <TouchableOpacity style={styles.secondaryButton} onPress={() => setShowImageUploader(prev => !prev)}>
                     <Text style={styles.secondaryButtonText}>Image</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryButton} onPress={() => setShowFileUploader(prev => !prev)}>
+                    <Text style={styles.secondaryButtonText}>File</Text>
+                </TouchableOpacity>
             </View>
-            {/* {showEmojiPicker && (
-                <View style={styles.emojiPickerContainer}>
-                    {emotions.map(em => (
-                        <TouchableOpacity key={em.id} onPress={() => onEmojiClick(em.icon)} style={styles.emojiButton}>
-                            <Text style={styles.emojiText}>{em.icon}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            )} */}
+
             {showEmojiPicker && (
                 <View style={styles.emojiSelectorContainer}>
-                    <ScrollView
-                        showsVerticalScrollIndicator={true} // Hiển thị thanh cuộn dọc
-                        contentContainerStyle={{ padding: 5 }}
-                    >
+                    <ScrollView contentContainerStyle={{ padding: 5 }}>
                         <EmojiSelector
                             onEmojiSelected={(emoji) => {
                                 setMessage(prev => prev + emoji);
@@ -233,10 +253,26 @@ const ChatContainer = ({
                 <View style={styles.imageUploaderContainer}>
                     <Text style={styles.uploadPrompt}>[Image Uploader Placeholder]</Text>
                     <TouchableOpacity onPress={() => handleImageUploadSuccess("https://via.placeholder.com/150")}>
-                        <Text style={styles.uploadButton}>Simulate Upload Success</Text>
+                        <Text style={styles.uploadButton}>Simulate Image Upload Success</Text>
                     </TouchableOpacity>
                 </View>
             )}
+            {showFileUploader && (
+                <View style={styles.fileUploaderContainer}>
+                    <Text style={styles.uploadPrompt}>[File Uploader Placeholder]</Text>
+                    <TouchableOpacity onPress={() => handleFileUploadSuccess({
+                        url: "https://example.com/sample.pdf",
+                        type: "pdf",
+                        name: "sample.pdf",
+                        size: 1024
+                    })}>
+                        <Text style={styles.uploadButton}>Simulate File Upload Success</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+            
+
+
             {groupDetailsVisible && groupInfo && (
                 <GroupDetailsModal
                     groupInfo={groupInfo}
@@ -272,20 +308,31 @@ const styles = StyleSheet.create({
     sendButtonText: { color: "#fff" },
     secondaryButton: { backgroundColor: "#6c757d", padding: 10, marginLeft: 5, borderRadius: 4 },
     secondaryButtonText: { color: "#fff" },
-    emojiPickerContainer: {
-        position: "absolute",
-        bottom: 70,
-        right: 20,
-        flexDirection: "row",
-        backgroundColor: "aquamarine",
-        padding: 10,
-        borderRadius: 20
+    emojiSelectorContainer: {
+        position: 'absolute',
+        bottom: 60,
+        right: 10,
+        width: 250,
+        height: 300,
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOpacity: 0.3,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 4,
     },
-    emojiButton: { marginHorizontal: 2 },
-    emojiText: { fontSize: 18 },
     imageUploaderContainer: {
         position: "absolute",
-        bottom: 70,
+        bottom: 60,
+        left: 20,
+        backgroundColor: "#f9f9f9",
+        padding: 10,
+        borderRadius: 10
+    },
+    fileUploaderContainer: {
+        position: "absolute",
+        bottom: 60,
         left: 20,
         backgroundColor: "#f9f9f9",
         padding: 10,
@@ -314,6 +361,8 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         padding: 5
     },
+    emojiButton: { marginHorizontal: 2 },
+    emojiText: { fontSize: 18 },
     deleteButton: { color: "red", marginLeft: 5 },
     bubble: {
         padding: 10,
@@ -328,6 +377,7 @@ const styles = StyleSheet.create({
     senderName: { fontWeight: "bold", marginBottom: 2 },
     messageText: { margin: 0 },
     image: { width: 200, height: 200, borderRadius: 5, marginTop: 5 },
+    video: { width: 200, height: 200, borderRadius: 5, marginTop: 5 },
     downloadLink: { color: "blue", textDecorationLine: "underline", marginTop: 5 },
     reaction: {
         position: "absolute",
@@ -337,19 +387,5 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         padding: 3,
         color: "#fff"
-    },
-    emojiSelectorContainer: {
-        position: 'absolute',
-        bottom: 60,   // Điều chỉnh khoảng cách từ dưới
-        right: 10,    // Căn sát bên phải
-        width: 250,   // Tăng chiều rộng
-        height: 300,  // Tăng chiều cao
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        elevation: 5,        // Shadow cho Android
-        shadowColor: '#000', // Shadow cho iOS
-        shadowOpacity: 0.3,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 4,
     },
 });

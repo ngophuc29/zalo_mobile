@@ -1,5 +1,4 @@
-// FriendModal.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     Modal,
     View,
@@ -9,9 +8,11 @@ import {
     FlatList,
     StyleSheet,
     ActivityIndicator,
+    ScrollView,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { io } from "socket.io-client";
+
 const socket = io("http://localhost:5000");
 
 const FriendModal = ({
@@ -21,40 +22,265 @@ const FriendModal = ({
     myname,
     friends,
     setFriendModalVisible,
-    handleAddFriend, // Nếu có logic bổ sung, bạn có thể tích hợp trong hàm này
+    handleAddFriend,
+    handleWithdrawFriendRequest,
+    requestedFriends,
+    setRequestedFriends,
+    friendRequests,
+    setFriendRequests,
+    handleRespondToFriendRequest,
 }) => {
     const [loadingFriend, setLoadingFriend] = useState(null);
+    const [activeTab, setActiveTab] = useState("search");
+    const [socketInitialized, setSocketInitialized] = useState(false);
 
-    // const addFriendHandler = async (username) => {
-    //     setLoadingFriend(username);
-    //     // Gửi sự kiện addFriend đến server
-    //     socket.emit("addFriend", { myUsername: myname, friendUsername: username });
-    //     await handleAddFriend(username);
-    //     setLoadingFriend(null);
+    // Socket listeners cho realtime updates
+    useEffect(() => {
+        if (socketInitialized) return;
 
-    //     Toast.show({
-    //         type: "success",
-    //         text1: "Thành công",
-    //         text2: "Bạn đã gửi lời mời kết bạn 👋",
-    //     });
-    // };
+        // Khi có lời mời mới được gửi đến user hiện tại
+        const onNewFriendRequest = (data) => {
+            if (data.to === myname) {
+                setFriendRequests(prev =>
+                    prev.includes(data.from) ? prev : [...prev, data.from]
+                );
+            }
+        };
+
+        // Khi lời mời bị thu hồi
+        const onFriendRequestWithdrawn = ({ from, to }) => {
+            if (from === myname) {
+                setRequestedFriends(prev => prev.filter(u => u !== to));
+            } else if (to === myname) {
+                setFriendRequests(prev => prev.filter(u => u !== from));
+            }
+        };
+
+        // Khi lời mời được chấp nhận
+        const onFriendAccepted = ({ friend, roomId }) => {
+            setRequestedFriends(prev => prev.filter(u => u !== friend));
+            setFriendRequests(prev => prev.filter(u => u !== friend));
+        };
+
+        socket.on("newFriendRequest", onNewFriendRequest);
+        socket.on("friendRequestWithdrawn", onFriendRequestWithdrawn);
+        socket.on("friendAccepted", onFriendAccepted);
+
+        setSocketInitialized(true);
+
+        return () => {
+            socket.off("newFriendRequest", onNewFriendRequest);
+            socket.off("friendRequestWithdrawn", onFriendRequestWithdrawn);
+            socket.off("friendAccepted", onFriendAccepted);
+        };
+    }, [myname, socketInitialized]);
+
     const addFriendHandler = async (username) => {
-        setLoadingFriend(username);
-        await handleAddFriend(username); // để bên ngoài emit
-        setLoadingFriend(null);
+        // Kiểm tra trùng lặp trước khi gửi
+        if (requestedFriends.includes(username)) {
+            Toast.show({
+                type: "error",
+                text1: "Lỗi",
+                text2: "Đã gửi lời mời đến người này rồi",
+            });
+            return;
+        }
 
-        Toast.show({
-            type: "success",
-            text1: "Thành công",
-            text2: "Bạn đã gửi lời mời kết bạn 👋",
-        });
+        setLoadingFriend(username);
+        try {
+            await handleAddFriend(username);
+
+            // Không cần cập nhật state ở đây nữa vì đã xử lý trong component cha
+            Toast.show({
+                type: "success",
+                text1: "Thành công",
+                text2: `Đã gửi lời mời đến ${username}`,
+            });
+        } catch (error) {
+            Toast.show({
+                type: "error",
+                text1: "Lỗi",
+                text2: "Gửi lời mời thất bại",
+            });
+        } finally {
+            setLoadingFriend(null);
+        }
     };
 
+    const cancelFriendHandler = async (username) => {
+        setLoadingFriend(username);
+        try {
+            await handleWithdrawFriendRequest(username);
+            // Không cần setState ở đây vì đã xử lý trong socket listener
+            Toast.show({
+                type: "success",
+                text1: "Thành công",
+                text2: `Đã thu hồi lời mời với ${username}`,
+            });
+        } catch (error) {
+            Toast.show({
+                type: "error",
+                text1: "Lỗi",
+                text2: "Thu hồi lời mời thất bại",
+            });
+        } finally {
+            setLoadingFriend(null);
+        }
+    };
+
+    const respondToRequestHandler = async (username, accept) => {
+        setLoadingFriend(username);
+        try {
+            await handleRespondToFriendRequest(username, accept);
+            setFriendRequests(prev => prev.filter(u => u !== username));
+
+            if (accept) {
+                setFriends(prev => [...prev, username]);
+                Toast.show({
+                    type: "success",
+                    text1: "Thành công",
+                    text2: `Đã chấp nhận lời mời từ ${username}`,
+                });
+            } else {
+                Toast.show({
+                    type: "info",
+                    text1: "Thông báo",
+                    text2: `Đã từ chối lời mời từ ${username}`,
+                });
+            }
+        } catch (error) {
+            Toast.show({
+                type: "error",
+                text1: "Lỗi",
+                text2: accept ? "Chấp nhận thất bại" : "Từ chối thất bại",
+            });
+        } finally {
+            setLoadingFriend(null);
+        }
+    };
+
+    // Filter accounts cho tab tìm kiếm
     const filteredAccounts = accounts.filter(
         (acc) =>
             acc.username.toLowerCase().includes(friendInput.toLowerCase()) &&
             acc.username !== myname &&
-            !friends.includes(acc.username)
+            !friends.includes(acc.username) &&
+            !requestedFriends.includes(acc.username)
+    );
+
+    // Các hàm render UI giữ nguyên
+    const renderSearchTab = () => (
+        <>
+            <TextInput
+                value={friendInput}
+                onChangeText={setFriendInput}
+                style={styles.input}
+                placeholder="Tìm kiếm user..."
+            />
+            <FlatList
+                data={filteredAccounts}
+                keyExtractor={(item) => item.username}
+                renderItem={({ item }) => (
+                    <View style={styles.listItem}>
+                        <View>
+                            <Text style={styles.username}>{item.username}</Text>
+                            <Text style={styles.fullname}>{item.fullname}</Text>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.addButton}
+                            onPress={() => addFriendHandler(item.username)}
+                            disabled={loadingFriend === item.username || requestedFriends.includes(item.username)}
+                        >
+                            {loadingFriend === item.username ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.addButtonText}>Kết bạn</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
+                ListEmptyComponent={
+                    <Text style={styles.emptyText}>Không tìm thấy người dùng phù hợp</Text>
+                }
+            />
+        </>
+    );
+
+    const renderSentRequestsTab = () => (
+        <FlatList
+            data={requestedFriends}
+            keyExtractor={(item, index) => index.toString()}
+            renderItem={({ item }) => {
+                const account = accounts.find(acc => acc.username === item);
+                return (
+                    <View style={styles.listItem}>
+                        <View>
+                            <Text style={styles.username}>{item}</Text>
+                            {account && <Text style={styles.fullname}>{account.fullname}</Text>}
+                        </View>
+                        <TouchableOpacity
+                            style={styles.withdrawButton}
+                            onPress={() => cancelFriendHandler(item)}
+                            disabled={loadingFriend === item}
+                        >
+                            {loadingFriend === item ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.addButtonText}>Thu hồi</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                );
+            }}
+            ListEmptyComponent={
+                <Text style={styles.emptyText}>Không có lời mời đã gửi</Text>
+            }
+        />
+    );
+
+    const renderReceivedRequestsTab = () => (
+        <FlatList
+            data={friendRequests}
+            keyExtractor={(item, index) => index.toString()}
+            renderItem={({ item }) => {
+                const account = accounts.find(acc => acc.username === item);
+                return (
+                    <View style={styles.listItem}>
+                        <View>
+                            <Text style={styles.username}>{item}</Text>
+                            {account && <Text style={styles.fullname}>{account.fullname}</Text>}
+                        </View>
+                        <View style={styles.requestButtonsContainer}>
+                            <TouchableOpacity
+                                style={[styles.requestButton, styles.acceptButton]}
+                                onPress={() => respondToRequestHandler(item, true)}
+                                disabled={loadingFriend === item}
+                            >
+                                {loadingFriend === item ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.addButtonText}>Chấp nhận</Text>
+                                )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.requestButton, styles.rejectButton]}
+                                onPress={() => respondToRequestHandler(item, false)}
+                                disabled={loadingFriend === item}
+                            >
+                                {loadingFriend === item ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.addButtonText}>Từ chối</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                );
+            }}
+            ListEmptyComponent={
+                <Text style={styles.emptyText}>Không có lời mời đến</Text>
+            }
+        />
     );
 
     return (
@@ -67,39 +293,38 @@ const FriendModal = ({
             <View style={styles.overlay}>
                 <View style={styles.modalContainer}>
                     <View style={styles.header}>
-                        <Text style={styles.title}>Kết bạn</Text>
+                        <Text style={styles.title}>Quản lý bạn bè</Text>
                         <TouchableOpacity onPress={() => setFriendModalVisible(false)}>
                             <Text style={styles.closeButton}>×</Text>
                         </TouchableOpacity>
                     </View>
-                    <TextInput
-                        value={friendInput}
-                        onChangeText={setFriendInput}
-                        style={styles.input}
-                        placeholder="Tìm kiếm user..."
-                    />
-                    <FlatList
-                        data={filteredAccounts}
-                        keyExtractor={(item) => item.username}
-                        renderItem={({ item }) => (
-                            <View style={styles.listItem}>
-                                <Text>
-                                    <Text style={styles.username}>{item.username}</Text> - {item.fullname}
-                                </Text>
-                                <TouchableOpacity
-                                    style={styles.addButton}
-                                    onPress={() => addFriendHandler(item.username)}
-                                    disabled={loadingFriend === item.username}
-                                >
-                                    {loadingFriend === item.username ? (
-                                        <ActivityIndicator color="#fff" />
-                                    ) : (
-                                        <Text style={styles.addButtonText}>Kết bạn</Text>
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    />
+
+                    <View style={styles.tabContainer}>
+                        <TouchableOpacity
+                            style={[styles.tabButton, activeTab === 'search' && styles.activeTab]}
+                            onPress={() => setActiveTab('search')}
+                        >
+                            <Text style={styles.tabText}>Tìm kiếm</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.tabButton, activeTab === 'sent' && styles.activeTab]}
+                            onPress={() => setActiveTab('sent')}
+                        >
+                            <Text style={styles.tabText}>Đã gửi ({requestedFriends.length})</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.tabButton, activeTab === 'received' && styles.activeTab]}
+                            onPress={() => setActiveTab('received')}
+                        >
+                            <Text style={styles.tabText}>Lời mời ({friendRequests.length})</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <ScrollView style={styles.contentContainer}>
+                        {activeTab === 'search' && renderSearchTab()}
+                        {activeTab === 'sent' && renderSentRequestsTab()}
+                        {activeTab === 'received' && renderReceivedRequestsTab()}
+                    </ScrollView>
                 </View>
             </View>
         </Modal>
@@ -114,17 +339,20 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     modalContainer: {
-        width: "80%",
+        width: "90%",
+        maxHeight: "80%",
         backgroundColor: "white",
         borderRadius: 10,
-        padding: 20,
+        overflow: "hidden",
         elevation: 5,
     },
     header: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 10,
+        padding: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: "#eee",
     },
     title: {
         fontSize: 18,
@@ -134,34 +362,87 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: "bold",
     },
+    tabContainer: {
+        flexDirection: "row",
+        borderBottomWidth: 1,
+        borderBottomColor: "#eee",
+    },
+    tabButton: {
+        flex: 1,
+        padding: 12,
+        alignItems: "center",
+    },
+    activeTab: {
+        borderBottomWidth: 2,
+        borderBottomColor: "#007bff",
+    },
+    tabText: {
+        color: "#333",
+        fontWeight: "500",
+    },
+    contentContainer: {
+        paddingHorizontal: 15,
+    },
     input: {
         height: 40,
         borderColor: "#ccc",
         borderWidth: 1,
         borderRadius: 5,
         paddingHorizontal: 10,
-        marginBottom: 10,
+        marginVertical: 15,
     },
     listItem: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        paddingVertical: 8,
+        paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: "#ddd",
+        borderBottomColor: "#eee",
     },
     username: {
         fontWeight: "bold",
+        fontSize: 16,
+    },
+    fullname: {
+        color: "#666",
+        fontSize: 14,
     },
     addButton: {
-        backgroundColor: "blue",
-        paddingVertical: 5,
-        paddingHorizontal: 10,
-        borderRadius: 5,
+        backgroundColor: "#007bff",
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 4,
+    },
+    withdrawButton: {
+        backgroundColor: "#ffc107",
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 4,
+    },
+    requestButtonsContainer: {
+        flexDirection: "row",
+    },
+    requestButton: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 4,
+        marginLeft: 8,
+    },
+    acceptButton: {
+        backgroundColor: "#28a745",
+    },
+    rejectButton: {
+        backgroundColor: "#dc3545",
     },
     addButtonText: {
         color: "white",
         fontWeight: "bold",
+        fontSize: 14,
+    },
+    emptyText: {
+        textAlign: "center",
+        color: "#666",
+        marginVertical: 20,
     },
 });
 
