@@ -84,7 +84,17 @@ const ChatScreen = () => {
             })
             .catch(err => console.error("Error loading activeChats:", err));
     }, []);
-
+    // --- Refresh dữ liệu FriendModal mỗi lần mở modal ---
+    useEffect(() => {
+        if (friendModalVisible && username) {
+            // Lấy lại danh sách bạn bè và lời mời
+            socket.emit("getFriends", username);
+            socket.emit("getSentFriendRequests", username);
+            socket.emit("getFriendRequests", username);
+            // Reset input tìm kiếm
+            setFriendInput("");
+        }
+    }, [friendModalVisible, username]);
     useEffect(() => {
         AsyncStorage.setItem('activeChats', JSON.stringify(activeChats))
             .catch(err => console.error("Error saving activeChats:", err));
@@ -665,8 +675,11 @@ const ChatScreen = () => {
     const handleAddFriend = (friendUsername) => {
         if (!username) return;
         socket.emit("addFriend", { myUsername: username, friendUsername });
-        setFriendModalVisible(false);
         setFriendInput("");
+        // cập nhật đúng user vừa gửi
+        setRequestedFriends(prev => [...prev, friendUsername]);
+        // (nếu bạn muốn modal vẫn mở để xem tab "Đã gửi", có thể bỏ setFriendModalVisible)
+        setFriendModalVisible(false);
     };
 
     // Hàm thu hồi lời mời kết bạn (nếu muốn)
@@ -812,19 +825,33 @@ const ChatScreen = () => {
             )}
             {friendModalVisible && (
                 <FriendModal
+                    
+                    // friendInput={friendInput}
+                    // setFriendInput={setFriendInput}
+                    // accounts={accounts}
+                    // myname={username}
+                    // friends={friends}
+                    // setFriendModalVisible={setFriendModalVisible}
+                    // handleAddFriend={handleAddFriend}
+                    // handleWithdrawFriendRequest={handleWithdrawFriendRequest}
+                    // requestedFriends={requestedFriends}
+                    // setRequestedFriends={setRequestedFriends}
+                    // friendRequests={friendRequests}
+                    // setFriendRequests={setFriendRequests}
+                    // handleRespondToFriendRequest={handleRespondToFriendRequest}
+                    socket={socket}
+                    myname={username}
+                    accounts={accounts}
                     friendInput={friendInput}
                     setFriendInput={setFriendInput}
-                    accounts={accounts}
-                    myname={username}
                     friends={friends}
-                    setFriendModalVisible={setFriendModalVisible}
-                    handleAddFriend={handleAddFriend}
-                    handleWithdrawFriendRequest={handleWithdrawFriendRequest}
                     requestedFriends={requestedFriends}
                     setRequestedFriends={setRequestedFriends}
                     friendRequests={friendRequests}
                     setFriendRequests={setFriendRequests}
-                    handleRespondToFriendRequest={handleRespondToFriendRequest}
+                    handleAddFriend={handleAddFriend}
+                    handleWithdrawFriendRequest={handleWithdrawFriendRequest}
+                    setFriendModalVisible={setFriendModalVisible}
                 />
             )}
             <Toast />

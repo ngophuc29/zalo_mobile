@@ -13,7 +13,7 @@ import {
 import Toast from "react-native-toast-message";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000");
+// const socket = io("http://localhost:5000");
 
 const FriendModal = ({
     friendInput,
@@ -29,6 +29,7 @@ const FriendModal = ({
     friendRequests,
     setFriendRequests,
     handleRespondToFriendRequest,
+    socket
 }) => {
     const [loadingFriend, setLoadingFriend] = useState(null);
     const [activeTab, setActiveTab] = useState("search");
@@ -74,7 +75,13 @@ const FriendModal = ({
             socket.off("friendAccepted", onFriendAccepted);
         };
     }, [myname, socketInitialized]);
-
+    // Filter cho tab tìm kiếm
+    const filtered = accounts.filter(acc =>
+        acc.username.includes(friendInput) &&
+        acc.username !== myname &&
+        !friends.includes(acc.username) &&
+        !requestedFriends.includes(acc.username)
+    );
     const addFriendHandler = async (username) => {
         // Kiểm tra trùng lặp trước khi gửi
         if (requestedFriends.includes(username)) {
@@ -107,22 +114,36 @@ const FriendModal = ({
         }
     };
 
+    // const cancelFriendHandler = async (username) => {
+    //     setLoadingFriend(username);
+    //     try {
+    //         await handleWithdrawFriendRequest(username);
+    //         // Không cần setState ở đây vì đã xử lý trong socket listener
+    //         setRequestedFriends(prev => prev.filter(u => u !== username));
+    //         Toast.show({
+    //             type: "success",
+    //             text1: "Thành công",
+    //             text2: `Đã thu hồi lời mời với ${username}`,
+    //         });
+    //     } catch (error) {
+    //         Toast.show({
+    //             type: "error",
+    //             text1: "Lỗi",
+    //             text2: "Thu hồi lời mời thất bại",
+    //         });
+    //     } finally {
+    //         setLoadingFriend(null);
+    //     }
+    // };
     const cancelFriendHandler = async (username) => {
         setLoadingFriend(username);
         try {
             await handleWithdrawFriendRequest(username);
-            // Không cần setState ở đây vì đã xử lý trong socket listener
-            Toast.show({
-                type: "success",
-                text1: "Thành công",
-                text2: `Đã thu hồi lời mời với ${username}`,
-            });
-        } catch (error) {
-            Toast.show({
-                type: "error",
-                text1: "Lỗi",
-                text2: "Thu hồi lời mời thất bại",
-            });
+            // Cập nhật ngay UI (optimistic update)
+            setRequestedFriends(prev => prev.filter(u => u !== username));
+            Toast.show({ type: "success", text1: "Thành công", text2: `Đã thu hồi lời mời với ${username}` });
+        } catch {
+            Toast.show({ type: "error", text1: "Lỗi", text2: "Thu hồi thất bại" });
         } finally {
             setLoadingFriend(null);
         }
