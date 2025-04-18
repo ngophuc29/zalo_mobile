@@ -120,13 +120,22 @@ const ChatScreen = () => {
     }, []);
 
     // Lắng nghe danh sách bạn từ server
+    // Lắng nghe danh sách bạn từ server
     useEffect(() => {
         const onFriendsList = (friendsList) => {
             setFriends(friendsList);
         };
+        // Realtime cập nhật khi server emit sau accept/cancel
+        const onFriendsListUpdated = (updated) => {
+            setFriends(updated);
+        };
+
         socket.on("friendsList", onFriendsList);
+        socket.on("friendsListUpdated", onFriendsListUpdated);
+
         return () => {
             socket.off("friendsList", onFriendsList);
+            socket.off("friendsListUpdated", onFriendsListUpdated);
         };
     }, []);
 
@@ -222,9 +231,18 @@ const ChatScreen = () => {
                 setFriendRequests(prev => prev.filter(u => u !== from));
             }
         };
+        const onRespondResult = (data) => {
+            showToast("Friend Request", data.message, data.success ? "success" : "info");
+                    // refresh cả 2
+                        socket.emit("getFriendRequests", username);
+                    socket.emit("getFriends", username);
+        };
         socket.on('friendRequestWithdrawn', onFriendRequestWithdrawn);
+        socket.on("respondFriendRequestResult", onRespondResult);
+
         return () => {
             socket.off('friendRequestWithdrawn', onFriendRequestWithdrawn);
+            socket.off("respondFriendRequestResult", onRespondResult);
         };
     }, [username]);
 
@@ -423,7 +441,7 @@ const ChatScreen = () => {
                     setActiveChats(prev => {
                         const updated = { ...prev };
                         if (updated[newMsg.room]) {
-                            updated[newMsg.room].unread = (updated[newMsg.room].unread || 0) + 1;
+                            updated[newMsg.room].unread = (updated[newMsg.room].unread || 0)  ;
                         } else {
                             updated[newMsg.room] = {
                                 partner: newMsg.room.includes("_")
@@ -644,7 +662,7 @@ const ChatScreen = () => {
                         .catch(err => console.error("Error saving activeChats:", err));
                     return updated;
                 });
-                showToast("Nhóm Chat", "Nhóm chat mới đã được tạo: " + groupChat.groupName, "success");
+                showToast("Nhóm Chat", "Nhóm chat mới đã được tạo: ", groupChat.groupName, "success");
             } catch (error) {
                 console.error("Error parsing newGroupChat:", error);
             }
@@ -689,10 +707,9 @@ const ChatScreen = () => {
 
     // Hàm xử lý phản hồi lời mời (chấp nhận/từ chối)
     const handleRespondToFriendRequest = (fromUsername, accept) => {
-        socket.emit("respondToFriendRequest", {
-            myUsername: username,
-            fromUsername,
-            accept,
+        socket.emit("respondFriendRequest", {
+            requestId: fromUsername, // hoặc đúng ID của req
+            action: accept ? "accepted" : "rejected"
         });
         setFriendRequests(prev => prev.filter(user => user !== fromUsername));
         if (accept) {
@@ -780,7 +797,7 @@ const ChatScreen = () => {
                     <View style={styles.chatHeader}>
                         <Text style={styles.chatHeaderText}>Chats</Text>
                         <TouchableOpacity style={styles.addButton} onPress={() => setGroupModalVisible(true)}>
-                            <Text style={styles.addButtonText}>+</Text>
+                            <Text style={styles.addButtonText}> </Text>
                         </TouchableOpacity>
                     </View>
                     {chatList.length === 0 ? (
@@ -825,7 +842,7 @@ const ChatScreen = () => {
             )}
             {friendModalVisible && (
                 <FriendModal
-                    
+
                     // friendInput={friendInput}
                     // setFriendInput={setFriendInput}
                     // accounts={accounts}
@@ -852,6 +869,7 @@ const ChatScreen = () => {
                     handleAddFriend={handleAddFriend}
                     handleWithdrawFriendRequest={handleWithdrawFriendRequest}
                     setFriendModalVisible={setFriendModalVisible}
+                    handleRespondToFriendRequest={handleRespondToFriendRequest}
                 />
             )}
             <Toast />
