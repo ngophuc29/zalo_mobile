@@ -8,12 +8,16 @@ import {
     Image,
     StyleSheet,
     Alert,
+    Button,
 } from 'react-native';
 import EmojiSelector, { Categories } from 'react-native-emoji-selector';
 import GroupDetailsModal from './GroupDetailsModal';
 import { Video } from 'expo-av';
 import FileUploaderMobile from './FileUploaderMobile';
 import ImageUploaderMobile from './ImageUploaderMobile';
+import FileUploader from './FileUploaderMobile';
+// Thêm vào phần import
+import { ActivityIndicator } from 'react-native';
 const ChatContainer = ({
     currentRoom,
     messages,
@@ -45,7 +49,8 @@ const ChatContainer = ({
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showImageUploader, setShowImageUploader] = useState(false);
     const [showFileUploader, setShowFileUploader] = useState(false);
-    const scrollViewRef = useRef(null);
+    const [showMediaUploader, setShowMediaUploader] = useState(false);
+    const scrollViewRef = useRef();
 
     useEffect(() => {
         if (scrollViewRef.current) {
@@ -71,34 +76,45 @@ const ChatContainer = ({
         setShowEmojiPicker(false);
     };
 
-    // Hàm khi upload ảnh thành công
-    const handleImageUploadSuccess = (imageUrl) => {
-        const fileMessage = {
+    // Xử lý khi upload thành công
+    const handleImageUploadSuccess = (url) => {
+        sendMessage({
             id: Date.now(),
             name: myname,
             message: '',
             room: currentRoom,
-            fileUrl: imageUrl,
-            fileType: 'image',
-        };
-        sendMessage(fileMessage);
+            fileUrl: url,
+            fileType: 'image'
+        });
         setShowImageUploader(false);
     };
-
-    // Hàm khi upload file thành công (bao gồm video hoặc file khác)
+    // Xử lý khi upload thành công
     const handleFileUploadSuccess = (fileData) => {
-        const fileMessage = {
+        sendMessage({
             id: Date.now(),
             name: myname,
             message: '',
             room: currentRoom,
             fileUrl: fileData.url,
-            fileType: fileData.type, // Ví dụ: 'video', 'pdf', 'doc'...
+            fileType: fileData.type,
+            fileName: fileData.name,
+            fileSize: fileData.size
+        });
+        setShowFileUploader(false);
+    }
+    // Hàm xử lý khi MediaUploader upload thành công
+    const handleMediaUploadSuccess = (fileData) => {
+        sendMessage({
+            id: Date.now(),
+            name: myname,
+            message: '',
+            room: currentRoom,
+            fileUrl: fileData.url,
+            fileType: fileData.type,
             fileName: fileData.name,
             fileSize: fileData.size,
-        };
-        sendMessage(fileMessage);
-        setShowFileUploader(false);
+        });
+        setShowMediaUploader(false);
     };
 
     const onChooseEmotion = (msgId, emotionId) => {
@@ -145,20 +161,36 @@ const ChatContainer = ({
                 <View style={[styles.bubble, { backgroundColor: isMine ? "#dcf8c6" : "#fff" }]}>
                     {msg.name !== myname && <Text style={styles.senderName}>{msg.name}</Text>}
                     {msg.message ? <Text style={styles.messageText}>{msg.message}</Text> : null}
-                    {msg.fileUrl ? (
-                        /\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
-                            <Image source={{ uri: msg.fileUrl }} style={styles.image} resizeMode="cover" />
-                        ) : /\.(mp4|webm|ogg)$/i.test(msg.fileUrl) ? (
-                            <Video
-                                source={{ uri: msg.fileUrl }}
-                                style={styles.video}
-                                useNativeControls
-                                resizeMode="contain"
-                            />
-                        ) : (
-                            <Text style={styles.downloadLink}>Download File</Text>
-                        )
-                    ) : null}
+                    {msg.fileUrl && (
+                        <div className="file-preview mb-2">
+                            {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
+                                <img
+                                    src={msg.fileUrl}
+                                    alt="uploaded"
+                                    className="img-thumbnail"
+                                    style={{ maxWidth: '200px', borderRadius: '8px' }}
+                                />
+                            ) : /\.(mp4|webm|ogg)$/i.test(msg.fileUrl) ? (
+                                <video
+                                    controls
+                                    poster={msg.thumbnailUrl}
+                                    style={{ display: 'block', maxWidth: '200px', borderRadius: '8px' }}
+                                >
+                                    <source src={msg.fileUrl} />
+                                </video>
+                            ) : (
+                                <a
+                                    href={msg.fileUrl}
+                                    download={msg.fileName || 'file'}
+                                    className="btn btn-sm btn-outline-primary"
+                                >
+                                    <i className="fas fa-file-download me-1" />
+                                    {msg.fileName || 'Tải xuống tài liệu'}
+                                </a>
+                            )}
+                        </div>
+                    )}
+
                     {msg.reaction ? (
                         <Text style={styles.reaction}>{emotions[msg.reaction - 1].icon}</Text>
                     ) : null}
@@ -249,29 +281,48 @@ const ChatContainer = ({
                     </ScrollView>
                 </View>
             )}
+            {/* Image/File uploader overlay */}
             {showImageUploader && (
-                <View style={styles.imageUploaderContainer}>
-                    <Text style={styles.uploadPrompt}>[Image Uploader Placeholder]</Text>
-                    <TouchableOpacity onPress={() => handleImageUploadSuccess("https://via.placeholder.com/150")}>
-                        <Text style={styles.uploadButton}>Simulate Image Upload Success</Text>
-                    </TouchableOpacity>
+                <View style={styles.uploaderOverlay}>
+                    <ImageUploaderMobile onUploadSuccess={handleImageUploadSuccess} />
+                    <Button title="Đóng" onPress={() => setShowImageUploader(false)} />
                 </View>
             )}
-            {showFileUploader && (
-                <View style={styles.fileUploaderContainer}>
-                    <Text style={styles.uploadPrompt}>[File Uploader Placeholder]</Text>
-                    <TouchableOpacity onPress={() => handleFileUploadSuccess({
-                        url: "https://example.com/sample.pdf",
-                        type: "pdf",
-                        name: "sample.pdf",
-                        size: 1024
-                    })}>
-                        <Text style={styles.uploadButton}>Simulate File Upload Success</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-            
 
+            {/* {showFileUploader && (
+                <View style={styles.uploaderOverlay}>
+                    <FileUploader 
+                        onUploadSuccess={handleFileUploadSuccess}
+                         
+                    />
+                    <Button title="Đóng" onPress={() => setShowFileUploader(false)} />
+                </View>
+            )} */}
+
+ 
+            {showFileUploader && (
+                <View style={styles.uploaderOverlay}>
+                    <FileUploader
+                        onUploadSuccess={(fileData) => {
+                            handleFileUploadSuccess(fileData);
+                            setShowFileUploader(false);
+                        }}
+                        fileTypes={[
+                            'video/*',
+                            'application/pdf',
+                            'application/msword',
+                            'application/vnd.ms-excel',
+                            'application/vnd.ms-powerpoint'
+                        ]}
+                    />
+                    <TouchableOpacity
+                        style={styles.closeBtn}
+                        onPress={() => setShowFileUploader(false)}
+                    >
+                        <Text style={{ color: 'red', fontWeight: 'bold' }}>ĐÓNG</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
 
             {groupDetailsVisible && groupInfo && (
                 <GroupDetailsModal
@@ -388,4 +439,50 @@ const styles = StyleSheet.create({
         padding: 3,
         color: "#fff"
     },
+    imageUploaderOverlay: {
+        position: 'absolute',
+        bottom: 60,
+        left: 20,
+        right: 20,
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        padding: 10,
+        elevation: 5,
+        zIndex: 1000,
+    },
+    closeUploaderBtn: {
+        marginTop: 8,
+        alignSelf: 'flex-end',
+    },
+    uploaderOverlay: {
+        position: 'absolute',
+        bottom: 60,
+        left: 20,
+        right: 20,
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        padding: 10,
+        elevation: 5,
+        zIndex: 1000,
+    },
+    closeBtn: {
+        marginTop: 8,
+        alignSelf: 'flex-end',
+    },
+    uploadingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 5,
+    marginTop: 10
+},
+closeBtn: {
+    backgroundColor: '#f0f0f0',
+    padding: 8,
+    borderRadius: 5,
+    alignSelf: 'center',
+    marginTop: 10
+}
 });
