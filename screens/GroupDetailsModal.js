@@ -6,7 +6,8 @@ import {
     TextInput,
     TouchableOpacity,
     ScrollView,
-    StyleSheet
+    StyleSheet,
+    FlatList
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 
@@ -21,15 +22,29 @@ const GroupDetailsModal = ({
     handleAddGroupMember,
     handleLeaveGroup,
     handleDisbandGroup,
+    allUsers = [],
 }) => {
     const [newMember, setNewMember] = useState('');
     const [selectedNewOwner, setSelectedNewOwner] = useState('');
+    const [showSuggestions, setShowSuggestions] = useState(false);
 
     const isOwner = groupInfo.owner === myname;
     const isDeputy = Array.isArray(groupInfo.deputies) && groupInfo.deputies.includes(myname);
     const eligibleNewOwners = Array.isArray(groupInfo.members)
         ? groupInfo.members.filter(m => m !== myname)
         : [];
+
+    // Filter out existing members and current user from suggestions
+    const filteredUsers = allUsers.filter(user => 
+        user.toLowerCase().includes(newMember.toLowerCase()) &&
+        !groupInfo.members.includes(user) &&
+        user !== myname
+    );
+
+    const handleSelectUser = (user) => {
+        setNewMember(user);
+        setShowSuggestions(false);
+    };
 
     const onAddMember = () => {
         const trimmed = newMember.trim();
@@ -137,20 +152,46 @@ const GroupDetailsModal = ({
 
                         {/* Add Member section */}
                         <View style={styles.addMemberSection}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Username to add"
-                                value={newMember}
-                                onChangeText={setNewMember}
-                                onSubmitEditing={onAddMember}
-                            />
-                            <TouchableOpacity
-                                style={[styles.addMemberButton, !newMember.trim() && styles.disabledButton]}
-                                onPress={onAddMember}
-                                disabled={!newMember.trim()}
-                            >
-                                <Text style={styles.addMemberText}>Add</Text>
-                            </TouchableOpacity>
+                            <View style={styles.searchContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Search username to add"
+                                    value={newMember}
+                                    onChangeText={(text) => {
+                                        setNewMember(text);
+                                        setShowSuggestions(true);
+                                    }}
+                                    onSubmitEditing={onAddMember}
+                                />
+                                <TouchableOpacity
+                                    style={[styles.addMemberButton, !newMember.trim() && styles.disabledButton]}
+                                    onPress={onAddMember}
+                                    disabled={!newMember.trim()}
+                                >
+                                    <Text style={styles.addMemberText}>Add</Text>
+                                </TouchableOpacity>
+                            </View>
+                            
+                            {showSuggestions && newMember.trim() !== '' && (
+                                <View style={styles.suggestionsContainer}>
+                                    <FlatList
+                                        data={filteredUsers}
+                                        keyExtractor={(item) => item}
+                                        renderItem={({ item }) => (
+                                            <TouchableOpacity
+                                                style={styles.suggestionItem}
+                                                onPress={() => handleSelectUser(item)}
+                                            >
+                                                <Text>{item}</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                        style={styles.suggestionsList}
+                                        scrollEnabled={true}
+                                        nestedScrollEnabled={true}
+                                        showsVerticalScrollIndicator={true}
+                                    />
+                                </View>
+                            )}
                         </View>
 
                         {/* Owner selects new owner before leaving */}
@@ -168,6 +209,8 @@ const GroupDetailsModal = ({
                                 </Picker>
                             </View>
                         )}
+
+                        <View style={{height:30,flex:1}}></View>
 
                         {/* Action buttons */}
                         <View style={styles.groupActions}>
@@ -215,12 +258,40 @@ const styles = StyleSheet.create({
     addMemberButton: { backgroundColor: '#007bff', padding: 10, borderRadius: 4, marginLeft: 8 },
     addMemberText: { color: '#fff', fontSize: 14 },
     ownerSection: { marginBottom: 12 },
-    groupActions: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 16, borderTopWidth: 1, borderColor: '#eee' },
+    groupActions: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 16, borderTopWidth: 1, borderColor: '#eee',marginTop:30 },
     leaveButton: { flex: 0.48, backgroundColor: '#ffc107', padding: 12, borderRadius: 4, alignItems: 'center' },
     leaveText: { color: '#fff', fontSize: 16 },
     disbandButton: { flex: 0.48, backgroundColor: '#dc3545', padding: 12, borderRadius: 4, alignItems: 'center' },
     disbandText: { color: '#fff', fontSize: 16 },
     disabledButton: { opacity: 0.5 },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        zIndex: 1,
+        width: '100%',
+    },
+    suggestionsContainer: {
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        right: 0,
+        backgroundColor: 'white',
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 4,
+        maxHeight: 150,
+        zIndex: 2,
+        width: '100%',
+        elevation: 3,
+    },
+    suggestionsList: {
+        flexGrow: 1,
+    },
+    suggestionItem: {
+        padding: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
 });
 
 export default GroupDetailsModal;

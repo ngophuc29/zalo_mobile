@@ -836,6 +836,7 @@ const ChatScreen = () => {
                 handleLeaveGroup={(selectedNewOwner) => handleLeaveGroup(selectedNewOwner)}
                 handleDisbandGroup={handleDisbandGroup}
                 setGroupDetailsVisible={setGroupDetailsVisible}
+                allUsers={accounts.map(acc => acc.username)}
             />
         );
     }
@@ -924,20 +925,6 @@ const ChatScreen = () => {
             )}
             {friendModalVisible && (
                 <FriendModal
-
-                    // friendInput={friendInput}
-                    // setFriendInput={setFriendInput}
-                    // accounts={accounts}
-                    // myname={username}
-                    // friends={friends}
-                    // setFriendModalVisible={setFriendModalVisible}
-                    // handleAddFriend={handleAddFriend}
-                    // handleWithdrawFriendRequest={handleWithdrawFriendRequest}
-                    // requestedFriends={requestedFriends}
-                    // setRequestedFriends={setRequestedFriends}
-                    // friendRequests={friendRequests}
-                    // setFriendRequests={setFriendRequests}
-                    // handleRespondToFriendRequest={handleRespondToFriendRequest}
                     socket={socket}
                     myname={username}
                     accounts={accounts}

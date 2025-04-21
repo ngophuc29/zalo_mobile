@@ -45,6 +45,7 @@ const ChatContainer = ({
     handleLeaveGroup,
     handleDisbandGroup,
     setGroupDetailsVisible,
+    allUsers,
 }) => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showImageUploader, setShowImageUploader] = useState(false);
@@ -336,6 +337,7 @@ const ChatContainer = ({
                     handleAddGroupMember={handleAddGroupMember}
                     handleLeaveGroup={handleLeaveGroup}
                     handleDisbandGroup={handleDisbandGroup}
+                    allUsers={allUsers}
                 />
             )}
         </View>
