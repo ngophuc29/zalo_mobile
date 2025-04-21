@@ -1,3 +1,4 @@
+ 
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
@@ -72,6 +73,11 @@ const ChatScreen = () => {
     const joinedRoomsRef = useRef(new Set());
     const processedUnreadMessagesRef = useRef(new Set());
     const currentRoomRef = useRef(activeRoom);
+
+
+    const excludedRoomsRef = useRef(new Set());
+
+
     useEffect(() => { currentRoomRef.current = activeRoom; }, [activeRoom]);
 
     // --- LOAD và SAVE activeChats từ AsyncStorage ---
@@ -136,6 +142,58 @@ const ChatScreen = () => {
         return () => {
             socket.off("friendsList", onFriendsList);
             socket.off("friendsListUpdated", onFriendsListUpdated);
+        };
+    }, []);
+
+    
+
+    // Hàm cập nhật
+    const removeRoomFromChat = (roomIdToRemove) => {
+        // Đánh dấu phòng đã xử lý
+        excludedRoomsRef.current.add(roomIdToRemove);
+
+        // Cập nhật ref joined rooms
+        joinedRoomsRef.current.delete(roomIdToRemove);
+
+        // Cập nhật state
+        setActiveChats(prev => {
+            const newChats = { ...prev };
+            delete newChats[roomIdToRemove];
+
+            // Lưu vào AsyncStorage ngay
+            AsyncStorage.setItem('activeChats', JSON.stringify(newChats))
+                .catch(err => console.error("Error saving activeChats:", err));
+
+            return newChats;
+        });
+
+        // Reset nếu đang ở phòng đó
+        if (activeRoom === roomIdToRemove) {
+            setActiveRoom(null);
+            setMessages([]);
+        }
+    };
+
+    // Xử lý sự kiện từ server
+    useEffect(() => {
+        const onLeftGroup = (data) => {
+            if (excludedRoomsRef.current.has(data.roomId)) return;
+            removeRoomFromChat(data.roomId);
+            showToast("Thành công", data.message, "success");
+        };
+
+        const onGroupDisbanded = (data) => {
+            if (excludedRoomsRef.current.has(data.roomId)) return;
+            removeRoomFromChat(data.roomId);
+            showToast("Thông báo", data.message, "info");
+        };
+
+        socket.on("leftGroup", onLeftGroup);
+        socket.on("groupDisbanded", onGroupDisbanded);
+
+        return () => {
+            socket.off("leftGroup", onLeftGroup);
+            socket.off("groupDisbanded", onGroupDisbanded);
         };
     }, []);
 
@@ -233,9 +291,9 @@ const ChatScreen = () => {
         };
         const onRespondResult = (data) => {
             showToast("Friend Request", data.message, data.success ? "success" : "info");
-                    // refresh cả 2
-                        socket.emit("getFriendRequests", username);
-                    socket.emit("getFriends", username);
+            // refresh cả 2
+            socket.emit("getFriendRequests", username);
+            socket.emit("getFriends", username);
         };
         socket.on('friendRequestWithdrawn', onFriendRequestWithdrawn);
         socket.on("respondFriendRequestResult", onRespondResult);
@@ -441,7 +499,7 @@ const ChatScreen = () => {
                     setActiveChats(prev => {
                         const updated = { ...prev };
                         if (updated[newMsg.room]) {
-                            updated[newMsg.room].unread = (updated[newMsg.room].unread || 0)  ;
+                            updated[newMsg.room].unread = (updated[newMsg.room].unread || 0);
                         } else {
                             updated[newMsg.room] = {
                                 partner: newMsg.room.includes("_")
@@ -525,67 +583,69 @@ const ChatScreen = () => {
     // ----- Các hàm quản lý Group Chat -----
 
     const handleRemoveGroupMember = (roomId, member) => {
-        Alert.alert(
-            "Xóa thành viên",
-            `Bạn có chắc muốn xóa ${member} khỏi nhóm?`,
-            [
-                { text: "Hủy", style: "cancel" },
-                {
-                    text: "Xóa",
-                    onPress: () => {
-                        socket.emit("removeGroupMember", { roomId, memberToRemove: member });
-                    },
-                },
-            ]
-        );
+        // Alert.alert(
+        //     "Xóa thành viên",
+        //     `Bạn có chắc muốn xóa ${member} khỏi nhóm?`,
+        //     [
+        //         { text: "Hủy", style: "cancel" },
+        //         {
+        //             text: "Xóa",
+        //             onPress: () => {
+        //             },
+        //         },
+        //     ]
+        // );
+        socket.emit("removeGroupMember", { roomId, memberToRemove: member });
     };
 
     const handleTransferGroupOwner = (roomId, newOwner) => {
-        Alert.alert(
-            "Chuyển quyền",
-            `Bạn có chắc muốn chuyển quyền quản trị cho ${newOwner}?`,
-            [
-                { text: "Hủy", style: "cancel" },
-                {
-                    text: "Chuyển",
-                    onPress: () => {
-                        socket.emit("transferGroupOwner", { roomId, newOwner });
-                    },
-                },
-            ]
-        );
+        // Alert.alert(
+        //     "Chuyển quyền",
+        //     `Bạn có chắc muốn chuyển quyền quản trị cho ${newOwner}?`,
+        //     [
+        //         { text: "Hủy", style: "cancel" },
+        //         {
+        //             text: "Chuyển",
+        //             onPress: () => {
+        //             },
+        //         },
+        //     ]
+        // );
+        socket.emit("transferGroupOwner", { roomId, newOwner });
     };
 
     const handleAssignDeputy = (roomId, member) => {
-        Alert.alert(
-            "Phó nhóm",
-            `Bổ nhiệm ${member} làm phó nhóm?`,
-            [
-                { text: "Hủy", style: "cancel" },
-                {
-                    text: "Đồng ý",
-                    onPress: () => {
-                        socket.emit("assignDeputy", { roomId, member });
-                    },
-                },
-            ]
-        );
+        // Alert.alert(
+        //     "Phó nhóm",
+        //     `Bổ nhiệm ${member} làm phó nhóm?`,
+        //     [
+        //         { text: "Hủy", style: "cancel" },
+        //         {
+        //             text: "Đồng ý",
+        //             onPress: () => {
+
+        //             },
+        //         },
+        //     ]
+        // );
+        socket.emit("assignDeputy", { roomId, member });
+
     };
 
     const handleCancelDeputy = (roomId, member) => {
-        Alert.alert(
-            "Phó nhóm",
-            `Bãi nhiệm ${member} khỏi vị trí phó nhóm?`,
-            [
-                { text: "Hủy", style: "cancel" },
-                {
-                    text: "Đồng ý",
-                    onPress: () => {
-                        socket.emit("cancelDeputy", { roomId, member });
-                    },
-                },
-            ]
-        );
+        // Alert.alert(
+        //     "Phó nhóm",
+        //     `Bãi nhiệm ${member} khỏi vị trí phó nhóm?`,
+        //     [
+        //         { text: "Hủy", style: "cancel" },
+        //         {
+        //             text: "Đồng ý",
+        //             onPress: () => {
+        //             },
+        //         },
+        //     ]
+        // );
+        socket.emit("cancelDeputy", { roomId, member });
     };
 
     const handleAddGroupMember = (newMember) => {
@@ -596,50 +656,27 @@ const ChatScreen = () => {
         socket.emit("addGroupMember", { roomId: activeRoom, newMember });
     };
 
-    const handleLeaveGroup = () => {
-        Alert.alert(
-            "Rời nhóm",
-            "Bạn có chắc muốn rời khỏi nhóm này?",
-            [
-                { text: "Hủy", style: "cancel" },
-                {
-                    text: "Rời nhóm",
-                    onPress: () => {
-                        socket.emit("leaveGroup", { roomId: activeRoom });
-                        setGroupDetailsVisible(false);
-                        setActiveChats(prev => {
-                            const updated = { ...prev };
-                            delete updated[activeRoom];
-                            return updated;
-                        });
-                        setActiveRoom(null);
-                    },
-                },
-            ]
-        );
+   
+
+    
+
+
+    // Rời nhóm
+    const handleLeaveGroup = (newOwner) => {
+        const isOwner = groupInfo?.owner === username;
+        if (isOwner && !newOwner) {
+            showToast("Lỗi", "Bạn phải chọn người nhận quyền trước khi rời nhóm", "error");
+            return;
+        }
+
+        socket.emit("leaveGroup", {
+            roomId: activeRoom,
+            ...(isOwner ? { newOwner } : {})
+        });
     };
 
     const handleDisbandGroup = () => {
-        Alert.alert(
-            "Giải tán nhóm",
-            "Bạn có chắc muốn giải tán nhóm này?",
-            [
-                { text: "Hủy", style: "cancel" },
-                {
-                    text: "Giải tán",
-                    onPress: () => {
-                        socket.emit("disbandGroup", { roomId: activeRoom });
-                        setGroupDetailsVisible(false);
-                        setActiveChats(prev => {
-                            const updated = { ...prev };
-                            delete updated[activeRoom];
-                            return updated;
-                        });
-                        setActiveRoom(null);
-                    },
-                },
-            ]
-        );
+        socket.emit("disbandGroup", { roomId: activeRoom });
     };
 
     // Lắng nghe event "newGroupChat" để cập nhật activeChats khi tạo nhóm mới
@@ -662,7 +699,7 @@ const ChatScreen = () => {
                         .catch(err => console.error("Error saving activeChats:", err));
                     return updated;
                 });
-                showToast("Nhóm Chat", "Nhóm chat mới đã được tạo: ", groupChat.groupName, "success");
+                showToast("Nhóm Chat", `Nhóm chat mới đã được tạo: ${groupChat.groupName}`, "success");
             } catch (error) {
                 console.error("Error parsing newGroupChat:", error);
             }
@@ -751,7 +788,7 @@ const ChatScreen = () => {
                 handleAssignDeputy={handleAssignDeputy}
                 handleCancelDeputy={handleCancelDeputy}
                 handleAddGroupMember={handleAddGroupMember}
-                handleLeaveGroup={handleLeaveGroup}
+                handleLeaveGroup={(selectedNewOwner) => handleLeaveGroup(selectedNewOwner)}
                 handleDisbandGroup={handleDisbandGroup}
                 setGroupDetailsVisible={setGroupDetailsVisible}
             />
@@ -842,20 +879,6 @@ const ChatScreen = () => {
             )}
             {friendModalVisible && (
                 <FriendModal
-
-                    // friendInput={friendInput}
-                    // setFriendInput={setFriendInput}
-                    // accounts={accounts}
-                    // myname={username}
-                    // friends={friends}
-                    // setFriendModalVisible={setFriendModalVisible}
-                    // handleAddFriend={handleAddFriend}
-                    // handleWithdrawFriendRequest={handleWithdrawFriendRequest}
-                    // requestedFriends={requestedFriends}
-                    // setRequestedFriends={setRequestedFriends}
-                    // friendRequests={friendRequests}
-                    // setFriendRequests={setFriendRequests}
-                    // handleRespondToFriendRequest={handleRespondToFriendRequest}
                     socket={socket}
                     myname={username}
                     accounts={accounts}

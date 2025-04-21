@@ -108,7 +108,8 @@ const UserScreen = ({ navigation, myname ,setIsLoggedIn}) => {
         }
     };
     const handleLogout = async () => {
-        await AsyncStorage.removeItem('user');
+        // await AsyncStorage.removeItem('user');
+        await AsyncStorage.clear();
         setIsLoggedIn(false); // quay lại màn hình login
     };
     return (
