@@ -612,69 +612,23 @@ const ChatScreen = () => {
     // ----- Các hàm quản lý Group Chat -----
 
     const handleRemoveGroupMember = (roomId, member) => {
-        // Alert.alert(
-        //     "Xóa thành viên",
-        //     `Bạn có chắc muốn xóa ${member} khỏi nhóm?`,
-        //     [
-        //         { text: "Hủy", style: "cancel" },
-        //         {
-        //             text: "Xóa",
-        //             onPress: () => {
-        //             },
-        //         },
-        //     ]
-        // );
         socket.emit("removeGroupMember", { roomId, memberToRemove: member });
+        showToast("Thông báo", `Đã xóa ${member} khỏi nhóm`, "info");
     };
 
     const handleTransferGroupOwner = (roomId, newOwner) => {
-        // Alert.alert(
-        //     "Chuyển quyền",
-        //     `Bạn có chắc muốn chuyển quyền quản trị cho ${newOwner}?`,
-        //     [
-        //         { text: "Hủy", style: "cancel" },
-        //         {
-        //             text: "Chuyển",
-        //             onPress: () => {
-        //             },
-        //         },
-        //     ]
-        // );
         socket.emit("transferGroupOwner", { roomId, newOwner });
+        showToast("Thông báo", `Đã chuyển quyền quản trị cho ${newOwner}`, "info");
     };
 
     const handleAssignDeputy = (roomId, member) => {
-        // Alert.alert(
-        //     "Phó nhóm",
-        //     `Bổ nhiệm ${member} làm phó nhóm?`,
-        //     [
-        //         { text: "Hủy", style: "cancel" },
-        //         {
-        //             text: "Đồng ý",
-        //             onPress: () => {
-
-        //             },
-        //         },
-        //     ]
-        // );
         socket.emit("assignDeputy", { roomId, member });
-
+        showToast("Thông báo", `Đã bổ nhiệm ${member} làm phó nhóm`, "info");
     };
 
     const handleCancelDeputy = (roomId, member) => {
-        // Alert.alert(
-        //     "Phó nhóm",
-        //     `Bãi nhiệm ${member} khỏi vị trí phó nhóm?`,
-        //     [
-        //         { text: "Hủy", style: "cancel" },
-        //         {
-        //             text: "Đồng ý",
-        //             onPress: () => {
-        //             },
-        //         },
-        //     ]
-        // );
         socket.emit("cancelDeputy", { roomId, member });
+        showToast("Thông báo", `Đã bãi nhiệm ${member} khỏi vị trí phó nhóm`, "info");
     };
 
     const handleAddGroupMember = (newMember) => {
@@ -683,6 +637,7 @@ const ChatScreen = () => {
             return;
         }
         socket.emit("addGroupMember", { roomId: activeRoom, newMember });
+        showToast("Thông báo", `Đã thêm ${newMember} vào nhóm`, "info");
     };
 
     // Hàm reset toàn bộ state sau khi rời/giải tán nhóm
@@ -722,12 +677,14 @@ const ChatScreen = () => {
         }
 
         socket.emit("leaveGroup", { roomId: activeRoom, ...(isOwner ? { newOwner } : {}) });
+        showToast("Thông báo", "Bạn đã rời khỏi nhóm", "info");
         removeRoomFromChat(activeRoom);
     };
 
     // Giải tán nhóm
     const handleDisbandGroup = () => {
         socket.emit("disbandGroup", { roomId: activeRoom });
+        showToast("Thông báo", "Nhóm đã được giải tán", "info");
         removeRoomFromChat(activeRoom);
     };
 
