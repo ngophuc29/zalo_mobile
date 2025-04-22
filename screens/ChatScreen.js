@@ -311,8 +311,71 @@ const ChatScreen = () => {
     useEffect(() => {
         if (!socket || !username) return;
 
-        socket.emit("getUserConversations", username);
-        
+        const onAddedToGroup = (data) => {
+            try {
+                const groupData = typeof data === 'string' ? JSON.parse(data) : data;
+                if (!groupData.roomId || !groupData.group?.groupName) {
+                    console.error("Invalid group data received:", groupData);
+                    return;
+                }
+
+                // Xóa khỏi danh sách excluded nếu có
+                if (excludedRoomsRef.current.has(groupData.roomId)) {
+                    excludedRoomsRef.current.delete(groupData.roomId);
+                }
+
+                // Cập nhật activeChats
+                setActiveChats(prev => {
+                    const newChats = {
+                        ...prev,
+                        [groupData.roomId]: {
+                            partner: groupData.group.groupName,
+                            unread: 0,
+                            messages: [],
+                            isGroup: true
+                        }
+                    };
+
+                    // Cập nhật AsyncStorage
+                    AsyncStorage.setItem('activeChats', JSON.stringify(newChats))
+                        .catch(err => console.error("Error saving activeChats:", err));
+
+                    return newChats;
+                });
+
+                // Auto join room mới
+                if (!joinedRoomsRef.current.has(groupData.roomId)) {
+                    socket.emit("join", groupData.roomId);
+                    joinedRoomsRef.current.add(groupData.roomId);
+                }
+
+                // Lấy lại toàn bộ conversations để đảm bảo dữ liệu đồng bộ
+                socket.emit("getUserConversations", username);
+
+                showToast("Thông báo", groupData.message || `Bạn đã được thêm vào nhóm ${groupData.group.groupName}`, "info");
+            } catch (error) {
+                console.error("Error handling added to group:", error);
+            }
+        };
+
+        const onGroupUpdated = () => {
+            // Refresh lại danh sách conversations khi có cập nhật về group
+            socket.emit("getUserConversations", username);
+        };
+
+        socket.on("addedToGroup", onAddedToGroup);
+        socket.on("groupUpdated", onGroupUpdated);
+
+        return () => {
+            socket.off("addedToGroup", onAddedToGroup);
+            socket.off("groupUpdated", onGroupUpdated);
+        };
+    }, [socket, username]);
+
+    // Tách riêng phần lắng nghe userConversations
+    useEffect(() => {
+        if (!socket || !username) return;
+
         const onUserConversations = (data) => {
             try {
                 const conversationData = JSON.parse(data);
@@ -371,53 +434,14 @@ const ChatScreen = () => {
             }
         };
 
-        const onAddedToGroup = (data) => {
-            try {
-                const groupData = typeof data === 'string' ? JSON.parse(data) : data;
-                if (!groupData.roomId || !groupData.groupName) {
-                    console.error("Invalid group data received:", groupData);
-                    return;
-                }
-
-                setActiveChats(prev => {
-                    if (prev[groupData.roomId]) return prev;
-                    const newChats = {
-                        ...prev,
-                        [groupData.roomId]: {
-                            partner: groupData.groupName,
-                            unread: 0,
-                            messages: [],
-                            isGroup: true
-                        }
-                    };
-
-                    // Cập nhật AsyncStorage
-                    AsyncStorage.setItem('activeChats', JSON.stringify(newChats))
-                        .catch(err => console.error("Error saving activeChats:", err));
-
-                    return newChats;
-                });
-
-                // Auto join room mới
-                if (!joinedRoomsRef.current.has(groupData.roomId)) {
-                    socket.emit("join", groupData.roomId);
-                    joinedRoomsRef.current.add(groupData.roomId);
-                }
-
-                showToast("Thông báo", `Bạn đã được thêm vào nhóm ${groupData.groupName}`, "info");
-            } catch (error) {
-                console.error("Error handling added to group:", error);
-            }
-        };
-
         socket.on("userConversations", onUserConversations);
-        socket.on("addedToGroup", onAddedToGroup);
+        // Initial fetch
+        socket.emit("getUserConversations", username);
 
         return () => {
             socket.off("userConversations", onUserConversations);
-            socket.off("addedToGroup", onAddedToGroup);
         };
-    }, [username,activeChats]); // Chỉ phụ thuộc vào username
+    }, [socket, username]);
 
     // Lắng nghe event "history" khi join room để load tin nhắn
     useEffect(() => {
@@ -662,36 +686,30 @@ const ChatScreen = () => {
     };
 
     // Hàm reset toàn bộ state sau khi rời/giải tán nhóm
-    const removeRoomFromChat = async (roomIdToRemove) => {
-        try {
-            // Đánh dấu đã xóa
-            excludedRoomsRef.current.add(roomIdToRemove);
+    const removeRoomFromChat = (roomIdToRemove) => {
+        // Đánh dấu đã xóa
+        excludedRoomsRef.current.add(roomIdToRemove);
 
-            // Reset activeRoom ngay lập tức nếu đang ở trong room đó
-            if (activeRoom === roomIdToRemove) {
-                setActiveRoom(null);
-            }
-
-            // Cập nhật state và AsyncStorage
-            await new Promise((resolve) => {
-                setActiveChats(prev => {
-                    const newChats = { ...prev };
-                    delete newChats[roomIdToRemove];
-                    
-                    // Cập nhật AsyncStorage ngay lập tức
-                    AsyncStorage.setItem('activeChats', JSON.stringify(newChats))
-                        .catch(err => console.error("Error saving activeChats:", err));
-                    
-                    resolve();
-                    return newChats;
-                });
-            });
-
-            return true;
-        } catch (err) {
-            console.error("Error in removeRoomFromChat:", err);
-            return false;
+        // Reset activeRoom ngay lập tức nếu đang ở trong room đó
+        if (activeRoom === roomIdToRemove) {
+            setActiveRoom(null);
         }
+
+        // Cập nhật state và AsyncStorage
+        setActiveChats(prev => {
+            const newChats = { ...prev };
+            delete newChats[roomIdToRemove];
+            
+            // Cập nhật AsyncStorage
+            AsyncStorage.setItem('activeChats', JSON.stringify(newChats))
+                .catch(err => console.error("Error saving activeChats:", err));
+            
+            return newChats;
+        });
+
+        // Reset group details
+        setGroupDetailsVisible(false);
+        setGroupInfo(null);
     };
 
     // Rời nhóm
@@ -705,24 +723,55 @@ const ChatScreen = () => {
 
         socket.emit("leaveGroup", { roomId: activeRoom, ...(isOwner ? { newOwner } : {}) });
         removeRoomFromChat(activeRoom);
-        setActiveRoom(null);
-        // Reset group details
-        setGroupDetailsVisible(false);
-        setGroupInfo(null);
-        showToast("Success", "Bạn đã rời nhóm thành công", "success");
-
     };
 
     // Giải tán nhóm
     const handleDisbandGroup = () => {
         socket.emit("disbandGroup", { roomId: activeRoom });
         removeRoomFromChat(activeRoom);
-        setActiveRoom(null);
-        // Reset group details
-        setGroupDetailsVisible(false);
-        setGroupInfo(null);
-        showToast("Success", "Nhóm đã được giải tán", "success");
     };
+
+    // Thêm useEffect mới để lắng nghe các sự kiện liên quan đến group
+    useEffect(() => {
+        if (!socket) return;
+
+        const onGroupLeft = (data) => {
+            try {
+                const { roomId, username: leftUser } = typeof data === 'string' ? JSON.parse(data) : data;
+                
+                // Nếu người rời nhóm là mình
+                if (leftUser === username) {
+                    removeRoomFromChat(roomId);
+                    showToast("Success", "Bạn đã rời nhóm thành công", "success");
+                } else {
+                    // Nếu người khác rời nhóm, cập nhật lại thông tin nhóm
+                    if (activeRoom === roomId) {
+                        socket.emit("getGroupDetails", { roomId });
+                    }
+                }
+            } catch (error) {
+                console.error("Error handling group left:", error);
+            }
+        };
+
+        const onGroupDisbanded = (data) => {
+            try {
+                const { roomId } = typeof data === 'string' ? JSON.parse(data) : data;
+                removeRoomFromChat(roomId);
+                showToast("Success", "Nhóm đã được giải tán", "success");
+            } catch (error) {
+                console.error("Error handling group disbanded:", error);
+            }
+        };
+
+        socket.on("groupLeft", onGroupLeft);
+        socket.on("groupDisbanded", onGroupDisbanded);
+
+        return () => {
+            socket.off("groupLeft", onGroupLeft);
+            socket.off("groupDisbanded", onGroupDisbanded);
+        };
+    }, [socket, username, activeRoom]);
 
     // Lắng nghe event "newGroupChat" để cập nhật activeChats khi tạo nhóm mới
     useEffect(() => {
