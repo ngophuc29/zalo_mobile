@@ -15,7 +15,7 @@ import io from 'socket.io-client';
 import ChatContainer from './ChatContainer';
 import FriendModal from './FriendModal';
 import GroupChatModal from './GroupChatModal';
-import { FaSearch, FaUserPlus, FaUsers } from "react-icons/fa";
+
 const socket = io("http://localhost:5000");
 
 const emotions = [
@@ -25,6 +25,10 @@ const emotions = [
     { id: 4, icon: "😒" },
     { id: 5, icon: "😡" },
 ];
+
+// Thêm vào đầu file ChatScreen.js
+const DefaultAvatar = "https://ui-avatars.com/api/?background=random&name=";
+const GroupIcon = "👥"; // hoặc dùng image URL cho group icon
 
 // Hàm tiện ích để lấy id của message dưới dạng string
 const getMessageId = (msg) => {
@@ -43,10 +47,30 @@ const showToast = (title, message, type = 'info') => {
     });
 };
 
+// Thêm vào ChatScreen.js
+const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    
+    // Nếu là today
+    if (diff < 24 * 60 * 60 * 1000) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    
+    // Nếu là tuần này
+    if (diff < 7 * 24 * 60 * 60 * 1000) {
+        return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+    }
+    
+    // Còn lại hiện ngày tháng
+    return date.toLocaleDateString();
+};
+
 const ChatScreen = () => {
     // State chat chính
-
-    const [isLoading, setIsLoading] = useState(true);
     const [username, setUsername] = useState(null);
     const [accounts, setAccounts] = useState([]);
     const [friends, setFriends] = useState([]);
@@ -54,7 +78,18 @@ const ChatScreen = () => {
     const [friendRequests, setFriendRequests] = useState([]); // Danh sách lời mời đến
     const [searchFilter, setSearchFilter] = useState('');
     const [filteredAccounts, setFilteredAccounts] = useState([]);
-    const [activeChats, setActiveChats] = useState({});
+    const [activeChats, setActiveChats] = useState({
+        // room_id: {
+        //     partner: string,
+        //     unread: number,
+        //     isGroup: boolean,
+        //     avatar: string,
+        //     lastMessage: {
+        //         text: string,
+        //         time: string
+        //     }
+        // }
+    });
     const [activeRoom, setActiveRoom] = useState(null);
     const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState('');
@@ -80,19 +115,18 @@ const ChatScreen = () => {
     const excludedRoomsRef = useRef(new Set());
 
 
-
     useEffect(() => { currentRoomRef.current = activeRoom; }, [activeRoom]);
 
-
     // --- LOAD và SAVE activeChats từ AsyncStorage ---
-    // Sửa lại useEffect load activeChats
     useEffect(() => {
-        AsyncStorage.setItem('activeChats', JSON.stringify(activeChats))
-            .catch(err => console.error("Error saving activeChats:", err));
-    }, [activeChats]);
-
-
-
+        AsyncStorage.getItem('activeChats')
+            .then(data => {
+                if (data) {
+                    setActiveChats(JSON.parse(data));
+                }
+            })
+            .catch(err => console.error("Error loading activeChats:", err));
+    }, []);
     // --- Refresh dữ liệu FriendModal mỗi lần mở modal ---
     useEffect(() => {
         if (friendModalVisible && username) {
@@ -353,14 +387,6 @@ const ChatScreen = () => {
                     joinedRoomsRef.current.add(groupData.roomId);
                 }
 
-                // Trong onAddedToGroup và onNewGroupChat
-                updated[groupData.roomId] = {
-                    partner: groupData.group.groupName,
-                    unread: 0,
-                    messages: [],
-                    isGroup: true,
-                    lastMessage: null // Hoặc lastMessage từ server nếu có
-                };
                 // Lấy lại toàn bộ conversations để đảm bảo dữ liệu đồng bộ
                 socket.emit("getUserConversations", username);
 
@@ -393,27 +419,51 @@ const ChatScreen = () => {
                 const conversationData = JSON.parse(data);
                 let chatsFromServer = {};
 
+                // Xử lý private chats
                 if (conversationData.privateChats) {
                     conversationData.privateChats.forEach(chat => {
                         if (!excludedRoomsRef.current.has(chat.roomId)) {
+                            const lastMsg = chat.messages[chat.messages.length - 1];
                             chatsFromServer[chat.roomId] = {
                                 partner: chat.friend,
                                 unread: 0,
-                                messages: chat.messages || [],
+                                isGroup: false,
+                                avatar: null,
+                                lastMessage: lastMsg ? {
+                                    text: `${lastMsg.name === username ? 'Bạn' : lastMsg.name}: ${lastMsg.message || 'Đã gửi một tệp đính kèm'}`,
+                                    time: lastMsg.createdAt
+                                } : null
                             };
+
+                            // Auto join room
+                            if (!joinedRoomsRef.current.has(chat.roomId)) {
+                                socket.emit("join", chat.roomId);
+                                joinedRoomsRef.current.add(chat.roomId);
+                            }
                         }
                     });
                 }
 
+                // Xử lý group chats tương tự
                 if (conversationData.groupChats) {
                     conversationData.groupChats.forEach(chat => {
                         if (!excludedRoomsRef.current.has(chat.roomId)) {
+                            const lastMsg = chat.messages[chat.messages.length - 1];
                             chatsFromServer[chat.roomId] = {
                                 partner: chat.groupName,
                                 unread: 0,
-                                messages: chat.messages || [],
                                 isGroup: true,
+                                lastMessage: lastMsg ? {
+                                    text: `${lastMsg.name === username ? 'Bạn' : lastMsg.name}: ${lastMsg.message || 'Đã gửi một tệp đính kèm'}`,
+                                    time: lastMsg.createdAt
+                                } : null
                             };
+
+                            // Auto join room
+                            if (!joinedRoomsRef.current.has(chat.roomId)) {
+                                socket.emit("join", chat.roomId);
+                                joinedRoomsRef.current.add(chat.roomId);
+                            }
                         }
                     });
                 }
@@ -426,20 +476,7 @@ const ChatScreen = () => {
                             mergedChats[room].unread = prevChats[room].unread;
                         }
                     });
-
-                    // Cập nhật AsyncStorage
-                    AsyncStorage.setItem('activeChats', JSON.stringify(mergedChats))
-                        .catch(err => console.error("Error saving activeChats:", err));
-
                     return mergedChats;
-                });
-
-                // Auto join các room
-                Object.keys(chatsFromServer).forEach(room => {
-                    if (!joinedRoomsRef.current.has(room)) {
-                        socket.emit("join", room);
-                        joinedRoomsRef.current.add(room);
-                    }
                 });
             } catch (error) {
                 console.error("Error parsing userConversations:", error);
@@ -447,7 +484,6 @@ const ChatScreen = () => {
         };
 
         socket.on("userConversations", onUserConversations);
-        // Initial fetch
         socket.emit("getUserConversations", username);
 
         return () => {
@@ -525,93 +561,99 @@ const ChatScreen = () => {
 
     // Lắng nghe event "thread" để nhận tin nhắn mới realtime (bao gồm group chat)
     useEffect(() => {
+        if (!socket) return;
         const onThread = (data) => {
             try {
                 const newMsg = JSON.parse(data);
-                setMessages((prev) => {
-                    if (prev.find((msg) => getMessageId(msg) === getMessageId(newMsg))) {
+                setMessages(prev => {
+                    if (prev.find(msg => getMessageId(msg) === getMessageId(newMsg))) {
                         return prev;
                     }
                     return [...prev, newMsg];
                 });
 
-                setActiveChats((prev) => {
+                // Cập nhật tin nhắn cuối trong activeChats
+                setActiveChats(prev => {
                     const updated = { ...prev };
-                    const lastMsgData = {
-                        senderId: newMsg.name,
-                        content: newMsg.message,
-                        timestamp: new Date().toISOString(),
-                    };
-
                     if (updated[newMsg.room]) {
-                        updated[newMsg.room].lastMessage = lastMsgData;
-                    } else {
-                        updated[newMsg.room] = {
-                            partner: newMsg.room.includes("_")
-                                ? newMsg.groupName || "Group Chat"
-                                : newMsg.name,
-                            unread: newMsg.room !== currentRoomRef.current ? 1 : 0,
-                            isGroup: newMsg.room.includes("_"),
-                            lastMessage: lastMsgData,
+                        // Cập nhật last message
+                        updated[newMsg.room].lastMessage = {
+                            text: `${newMsg.name === username ? 'Bạn' : newMsg.name}: ${newMsg.message || 'Đã gửi một tệp đính kèm'}`,
+                            time: new Date().toISOString()
                         };
+
+                        // Cập nhật unread nếu không phải room hiện tại
+                        if (newMsg.room !== currentRoomRef.current) {
+                            updated[newMsg.room].unread = (updated[newMsg.room].unread || 0) + 0.5;
+                        }
                     }
 
-                    if (newMsg.room !== currentRoomRef.current) {
-                        updated[newMsg.room].unread = (updated[newMsg.room].unread || 0) + 1;
-                    }
-
-                    AsyncStorage.setItem("activeChats", JSON.stringify(updated)).catch((err) =>
-                        console.error("Error saving activeChats:", err)
-                    );
+                    AsyncStorage.setItem('activeChats', JSON.stringify(updated))
+                        .catch(err => console.error("Error saving activeChats:", err));
                     return updated;
                 });
             } catch (error) {
                 console.error("Error parsing thread:", error);
             }
         };
-
         socket.on("thread", onThread);
+        return () => socket.off("thread", onThread);
+    }, [socket, username]);
 
-        return () => {
-            socket.off("thread", onThread);
-        };
-    }, []);
-    const getLastMessage = (roomId) => {
-        socket.emit("getLastMessage", roomId);
-    };
+    // Thêm useEffect mới để lắng nghe tin nhắn mới
     useEffect(() => {
-        Object.keys(activeChats).forEach((roomId) => {
-            getLastMessage(roomId);
-        });
-    }, [activeChats]);
+        if (!socket || !username) return;
 
-    // Thêm vào useEffect socket listeners (cùng với các socket.on khác)
-    useEffect(() => {
-        const onLastMessage = (msgDoc) => {
-            if (!msgDoc || !msgDoc.room) return;
+        const onNewMessage = (data) => {
+            try {
+                const newMsg = JSON.parse(data);
+                
+                // Cập nhật activeChats ngay khi có tin nhắn mới
+                setActiveChats(prev => {
+                    const updated = { ...prev };
+                    const roomId = newMsg.room;
 
-            setActiveChats((prev) => {
-                if (!prev[msgDoc.room]) return prev;
-                return {
-                    ...prev,
-                    [msgDoc.room]: {
-                        ...prev[msgDoc.room],
-                        lastMessage: {
-                            senderId: msgDoc.name,
-                            content: msgDoc.message,
-                            timestamp: msgDoc.createdAt,
-                        },
-                    },
-                };
-            });
+                    if (updated[roomId]) {
+                        updated[roomId] = {
+                            ...updated[roomId],
+                            lastMessage: {
+                                text: `${newMsg.name === username ? 'Bạn' : newMsg.name}: ${newMsg.message || 'Đã gửi một tệp đính kèm'}`,
+                                time: new Date().toISOString()
+                            },
+                            // Tăng unread nếu không phải room hiện tại
+                            unread: roomId !== currentRoomRef.current 
+                                ? (updated[roomId].unread || 0) + 0.5 
+                                : 0
+                        };
+
+                        // Lưu vào AsyncStorage
+                        AsyncStorage.setItem('activeChats', JSON.stringify(updated))
+                            .catch(err => console.error("Error saving activeChats:", err));
+                    }
+                    return updated;
+                });
+
+                // Cập nhật messages nếu đang ở trong room đó
+                if (newMsg.room === currentRoomRef.current) {
+                    setMessages(prev => {
+                        if (prev.find(msg => getMessageId(msg) === getMessageId(newMsg))) {
+                            return prev;
+                        }
+                        return [...prev, newMsg];
+                    });
+                }
+            } catch (error) {
+                console.error("Error handling new message:", error);
+            }
         };
 
-        socket.on("lastMessage", onLastMessage);
-
+        socket.on("thread", onNewMessage);
+        
         return () => {
-            socket.off("lastMessage", onLastMessage);
+            socket.off("thread", onNewMessage);
         };
-    }, []);
+    }, [socket, username]);
+
     // Hàm gửi tin nhắn
     const sendMessageHandler = (msgObj) => {
         if (!activeRoom) {
@@ -625,15 +667,14 @@ const ChatScreen = () => {
     const handleRoomClick = (room) => {
         setActiveRoom(room);
         socket.emit("join", room);
-        setMessages([]);
-        setActiveChats((prev) => {
+        setMessages([]); // Reset tin nhắn khi chuyển room
+        setActiveChats(prev => {
             const updated = { ...prev };
             if (updated[room]) {
                 updated[room].unread = 0;
             }
-            AsyncStorage.setItem("activeChats", JSON.stringify(updated)).catch((err) =>
-                console.error("Error saving activeChats:", err)
-            );
+            AsyncStorage.setItem('activeChats', JSON.stringify(updated))
+                .catch(err => console.error("Error saving activeChats:", err));
             return updated;
         });
     };
@@ -795,8 +836,8 @@ const ChatScreen = () => {
         if (!socket) return;
         const onNewGroupChat = (data) => {
             try {
-                const groupChat = JSON.parse(data); // Dữ liệu nhóm mới từ server
-                setActiveChats((prev) => {
+                const groupChat = JSON.parse(data);
+                setActiveChats(prev => {
                     const updated = {
                         ...prev,
                         [groupChat.roomId]: {
@@ -804,11 +845,10 @@ const ChatScreen = () => {
                             unread: 0,
                             messages: [],
                             isGroup: true,
-                            lastMessage: null, // Hoặc lastMessage từ server nếu có
                         },
                     };
                     AsyncStorage.setItem('activeChats', JSON.stringify(updated))
-                        .catch((err) => console.error("Error saving activeChats:", err));
+                        .catch(err => console.error("Error saving activeChats:", err));
                     return updated;
                 });
                 showToast("Nhóm Chat", `Nhóm chat mới đã được tạo: ${groupChat.groupName}`, "success");
@@ -866,168 +906,10 @@ const ChatScreen = () => {
         } else {
             showToast("Kết bạn", `Đã từ chối lời mời từ ${fromUsername}`, "info");
         }
-
-
     };
 
-    const formatTime = (timestamp) => {
-        if (!timestamp) return '';
-        const date = new Date(timestamp);
-        return date.toLocaleString([], {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
-    // Thêm vào useEffect socket listeners
-    const onLastMessage = (msgDoc) => {
-        if (!msgDoc || !msgDoc.room) return;
-
-        setActiveChats(prev => {
-            if (!prev[msgDoc.room]) return prev;
-            return {
-                ...prev,
-                [msgDoc.room]: {
-                    ...prev[msgDoc.room],
-                    lastMessage: {
-                        senderId: msgDoc.name,
-                        content: msgDoc.message,
-                        timestamp: msgDoc.createdAt
-                    }
-                }
-            };
-        });
-    };
-
-    socket.on("lastMessage", onLastMessage);
     const chatList = Object.keys(activeChats).map(room => ({ room, ...activeChats[room] }));
     const isSearching = searchFilter.trim().length > 0;
-
-    const getAvatarByName = (name) => {
-        const user = accounts.find((u) => u.username === name);
-        return user?.image || "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/2048px-User-avatar.svg.png";
-    };
-
-    // Thêm socket vào dependencies của useEffect
-    // useEffect(() => {
-    //     const handleMessageDeleted = (data) => {
-    //         console.log("Message deleted event received:", data); // Debug log
-    //         setMessages((prevMessages) =>
-    //             prevMessages.filter((msg) => getMessageId(msg) !== data.messageId)
-    //         );
-
-    //         // Cập nhật activeChats nếu tin nhắn bị xóa là tin nhắn cuối cùng
-    //         setActiveChats((prevChats) => {
-    //             const updatedChats = { ...prevChats };
-    //             if (updatedChats[data.room]) {
-    //                 const chatMessages = messages.filter(msg => getMessageId(msg) !== data.messageId);
-    //                 if (chatMessages.length > 0) {
-    //                     updatedChats[data.room].lastMessage = chatMessages[chatMessages.length - 1];
-    //                 } else {
-    //                     delete updatedChats[data.room].lastMessage;
-    //                 }
-    //             }
-    //             return updatedChats;
-    //         });
-    //     };
-
-    //     socket.on("messageDeleted", handleMessageDeleted);
-
-    //     return () => {
-    //         socket.off("messageDeleted", handleMessageDeleted);
-    //     };
-    // }, [socket, messages]); // Thêm socket và messages vào dependencies
-    // const handleDeleteMessage = (msgId, room) => {
-    //     // Alert.alert(
-    //     //     "Xóa tin nhắn",
-    //     //     "Bạn có chắc chắn muốn xóa tin nhắn này?",
-    //     //     [
-    //     //         { text: "Hủy", style: "cancel" },
-    //     //         {
-    //     //             text: "Xóa",
-    //     //             style: "destructive",
-    //     //             onPress: () => {
-    //     //                 // Gửi sự kiện xóa tin nhắn đến server
-    //                     socket.emit("deleteMessage", { messageId: msgId, room });
-
-    //                     // Xóa tin nhắn khỏi danh sách trên giao diện (optimistic update)
-    //                     setMessages((prevMessages) =>
-    //                         prevMessages.filter((msg) => getMessageId(msg) !== msgId)
-    //                     );
-    //     //             },
-    //     //         },
-    //     //     ]
-    //     // );
-    // };
-
-    // Trong useEffect xử lý messageDeleted event - ChatScreen.js
-    useEffect(() => {
-        const handleMessageDeleted = (data) => {
-            const { messageId, room } = typeof data === 'string' ? JSON.parse(data) : data;
-
-            // Cập nhật danh sách tin nhắn
-            setMessages((prevMessages) =>
-                prevMessages.filter((msg) => getMessageId(msg) !== messageId)
-            );
-
-            // Cập nhật activeChats nếu tin nhắn bị xóa là tin nhắn cuối cùng
-            setActiveChats((prevChats) => {
-                const updatedChats = { ...prevChats };
-                if (updatedChats[room]) {
-                    const remainingMessages = messages.filter(msg => getMessageId(msg) !== messageId);
-                    if (remainingMessages.length > 0) {
-                        // Cập nhật lastMessage là tin nhắn cuối cùng còn lại
-                        updatedChats[room].lastMessage = {
-                            senderId: remainingMessages[remainingMessages.length - 1].name,
-                            content: remainingMessages[remainingMessages.length - 1].message,
-                            timestamp: remainingMessages[remainingMessages.length - 1].createdAt
-                        };
-                    } else {
-                        // Nếu không còn tin nhắn nào, xóa lastMessage
-                        delete updatedChats[room].lastMessage;
-                    }
-                }
-                return updatedChats;
-            });
-        };
-
-        socket.on("messageDeleted", handleMessageDeleted);
-
-        return () => {
-            socket.off("messageDeleted", handleMessageDeleted);
-        };
-    }, [messages]); // Thêm messages vào dependencies
-
-    // Sửa lại hàm handleDeleteMessage
-    const handleDeleteMessage = (msgId, room) => {
-        socket.emit("deleteMessage", { messageId: msgId, room });
-
-        // Optimistic update
-        setMessages((prevMessages) =>
-            prevMessages.filter((msg) => getMessageId(msg) !== msgId)
-        );
-
-        // Cập nhật activeChats
-        setActiveChats((prevChats) => {
-            const updatedChats = { ...prevChats };
-            if (updatedChats[room]) {
-                const remainingMessages = messages.filter(msg => getMessageId(msg) !== msgId);
-                if (remainingMessages.length > 0) {
-                    updatedChats[room].lastMessage = {
-                        senderId: remainingMessages[remainingMessages.length - 1].name,
-                        content: remainingMessages[remainingMessages.length - 1].message,
-                        timestamp: remainingMessages[remainingMessages.length - 1].createdAt
-                    };
-                } else {
-                    delete updatedChats[room].lastMessage;
-                }
-            }
-            return updatedChats;
-        });
-    };
-
 
     // Nếu đang chọn một chat, chuyển sang ChatContainer
     if (activeRoom) {
@@ -1039,7 +921,7 @@ const ChatScreen = () => {
                 sendMessage={sendMessageHandler}
                 message={message}
                 setMessage={setMessage}
-                handleDeleteMessage={handleDeleteMessage}
+                handleDeleteMessage={(msgId, room) => showToast("Delete", `Delete message ${msgId}`, "info")}
                 handleChooseEmotion={handleChooseEmotion}
                 activeEmotionMsgId={activeEmotionMsgId}
                 setActiveEmotionMsgId={setActiveEmotionMsgId}
@@ -1116,52 +998,50 @@ const ChatScreen = () => {
                         <FlatList
                             data={chatList}
                             keyExtractor={(item) => item.room}
-                            // Sửa phần renderItem trong FlatList
-                            // Trong phần render FlatList
                             renderItem={({ item }) => (
                                 <TouchableOpacity
-                                    style={styles.chatItem}
+                                    style={[styles.chatItem]}
                                     onPress={() => handleRoomClick(item.room)}
                                 >
                                     <View style={styles.avatarContainer}>
                                         {item.isGroup ? (
-                                            <View style={styles.groupAvatar}>
-                                                <FaUsers />
-                                            </View>
+                                            <Text style={styles.groupIcon}>{GroupIcon}</Text>
                                         ) : (
-                                            <Image
-                                                source={{ uri: getAvatarByName(item.partner) }}
+                                            <Image 
+                                                source={{ 
+                                                    uri: item.avatar || `${DefaultAvatar}${item.partner}`
+                                                }}
                                                 style={styles.avatar}
                                             />
                                         )}
                                     </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontWeight: 'bold' }}>{item.partner}</Text>
-                                        {item.lastMessage && (
-                                            <Text
-                                                numberOfLines={1}
-                                                style={{
-                                                    color: '#666',
-                                                    fontSize: 14,
-                                                    marginTop: 4,
-                                                }}
+                                    
+                                    <View style={styles.chatInfo}>
+                                        <View style={styles.chatHeader}>
+                                            <Text style={styles.chatName}>
+                                                {item.isGroup ? `${item.partner}` : item.partner}
+                                            </Text>
+                                            <Text style={styles.lastMessageTime}>
+                                                {formatTime(item.lastMessage?.time)}
+                                            </Text>
+                                        </View>
+                                        
+                                        <View style={styles.lastMessageContainer}>
+                                            <Text 
+                                                numberOfLines={1} 
+                                                style={[
+                                                    styles.lastMessageText,
+                                                    item.unread > 0 && styles.unreadMessage
+                                                ]}
                                             >
-                                                {item.lastMessage.senderId === username ? "You: " : `${item.lastMessage.senderId}: `}
-                                                {item.lastMessage.content}
+                                                {item.lastMessage?.text || 'Chưa có tin nhắn'}
                                             </Text>
-                                        )}
-                                    </View>
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        {item.lastMessage && (
-                                            <Text style={{ color: '#999', fontSize: 12 }}>
-                                                {formatTime(item.lastMessage.timestamp)}
-                                            </Text>
-                                        )}
-                                        {item.unread > 0 && (
-                                            <View style={styles.unreadBadge}>
-                                                <Text style={styles.unreadText}>{item.unread}</Text>
-                                            </View>
-                                        )}
+                                            {item.unread > 0 && (
+                                                <View style={styles.unreadBadge}>
+                                                    <Text style={styles.unreadText}>{item.unread}</Text>
+                                                </View>
+                                            )}
+                                        </View>
                                     </View>
                                 </TouchableOpacity>
                             )}
@@ -1219,45 +1099,76 @@ const styles = StyleSheet.create({
     chatHeaderText: { fontSize: 24 },
     addButton: { backgroundColor: "#007bff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
     addButtonText: { color: "#fff", fontSize: 24 },
-    chatItem: { padding: 10, borderBottomWidth: 1, borderBottomColor: "#ddd", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    unreadBadge: { backgroundColor: "red", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2 },
-    unreadText: { color: "#fff", fontSize: 12 },
-    noChatsContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
-    noChatsText: { fontSize: 16, color: "#888" },
+    chatItem: {
+        flexDirection: 'row',
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+        alignItems: 'center',
+    },
     avatarContainer: {
-        marginRight: 10,
+        marginRight: 12,
     },
     avatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 50,
+        height: 50,
+        borderRadius: 25,
     },
-    groupAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#007bff',
-        justifyContent: 'center',
-        alignItems: 'center',
+    groupIcon: {
+        fontSize: 35,
+        width: 50,
+        height: 50,
+        textAlign: 'center',
+        lineHeight: 50,
+        backgroundColor: '#e1e1e1',
+        borderRadius: 25,
     },
-    groupAvatarText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    loadingContainer: {
+    chatInfo: {
         flex: 1,
+    },
+    chatHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    chatName: {
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    lastMessageTime: {
+        fontSize: 12,
+        color: '#666',
+    },
+    lastMessageContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    lastMessageText: {
+        fontSize: 14,
+        color: '#666',
+        flex: 1,
+        marginRight: 8,
+    },
+    unreadMessage: {
+        fontWeight: '600',
+        color: '#000',
+    },
+    unreadBadge: {
+        backgroundColor: '#007AFF',
+        minWidth: 20,
+        height: 20,
+        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        paddingHorizontal: 6,
     },
-    loadingImage: {
-        width: 100,
-        height: 100,
-        marginBottom: 20,
+    unreadText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '600',
     },
-    loadingText: {
-        fontSize: 16,
-        color: '#888',
-    },
+    noChatsContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
+    noChatsText: { fontSize: 16, color: "#888" },
 });

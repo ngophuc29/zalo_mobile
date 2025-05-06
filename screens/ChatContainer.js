@@ -16,7 +16,6 @@ import { Video } from 'expo-av';
 import FileUploaderMobile from './FileUploaderMobile';
 import ImageUploaderMobile from './ImageUploaderMobile';
 import FileUploader from './FileUploaderMobile';
-import { Platform, Linking } from 'react-native';
 // Thêm vào phần import
 import { ActivityIndicator } from 'react-native';
 const ChatContainer = ({
@@ -70,8 +69,7 @@ const ChatContainer = ({
                 id: Date.now(),
                 name: myname,
                 message: message,
-                room: currentRoom,
-                createdAt: new Date().toISOString(), // Thêm thời gian gửi tin nhắn
+                room: currentRoom, createdAt: new Date().toISOString(),
             };
             sendMessage(msgObj);
             setMessage('');
@@ -87,8 +85,7 @@ const ChatContainer = ({
             message: '',
             room: currentRoom,
             fileUrl: url,
-            fileType: 'image',
-            createdAt: new Date().toISOString(), // Thêm thời gian gửi tin nhắn
+            fileType: 'image'
         });
         setShowImageUploader(false);
     };
@@ -102,8 +99,7 @@ const ChatContainer = ({
             fileUrl: fileData.url,
             fileType: fileData.type,
             fileName: fileData.name,
-            fileSize: fileData.size,
-            createdAt: new Date().toISOString(),
+            fileSize: fileData.size
         });
         setShowFileUploader(false);
     }
@@ -118,7 +114,6 @@ const ChatContainer = ({
             fileType: fileData.type,
             fileName: fileData.name,
             fileSize: fileData.size,
-            createdAt: new Date().toISOString(),
         });
         setShowMediaUploader(false);
     };
@@ -127,102 +122,225 @@ const ChatContainer = ({
         console.log("Chosen emotion:", { msgId, emotionId });
         handleChooseEmotion(msgId, emotionId);
     };
+     
+    // const renderMessageItem = (msg) => {
+    //     const isMine = msg.name === myname;
+    //     return (
+    //         <View key={getMessageId(msg)} style={[styles.messageItem, { alignSelf: isMine ? 'flex-end' : 'flex-start' }]}>
+    //             {isMine && (
+    //                 <View style={styles.actionContainer}>
+    //                     <TouchableOpacity
+    //                         onPress={() =>
+    //                             setActiveEmotionMsgId(
+    //                                 getMessageId(msg) === activeEmotionMsgId ? null : getMessageId(msg)
+    //                             )
+    //                         }
+    //                     >
+    //                         <Text style={styles.emotionIcon}>😊</Text>
+    //                     </TouchableOpacity>
+    //                     {activeEmotionMsgId === getMessageId(msg) && (
+    //                         <View style={styles.emojiPicker}>
+    //                             {emotions.map(em => (
+    //                                 <TouchableOpacity
+    //                                     key={em.id}
+    //                                     onPress={() => {
+    //                                         onChooseEmotion(getMessageId(msg), em.id);
+    //                                         setActiveEmotionMsgId(null);
+    //                                     }}
+    //                                     style={styles.emojiButton}
+    //                                 >
+    //                                     <Text style={styles.emojiText}>{em.icon}</Text>
+    //                                 </TouchableOpacity>
+    //                             ))}
+    //                         </View>
+    //                     )}
+    //                     <TouchableOpacity onPress={() => handleDeleteMessage(getMessageId(msg), msg.room)}>
+    //                         <Text style={styles.deleteButton}>X</Text>
+    //                     </TouchableOpacity>
+    //                 </View>
+    //             )}
+    //             <View style={[styles.bubble, { backgroundColor: isMine ? "#dcf8c6" : "#fff" }]}>
+    //                 {msg.name !== myname && <Text style={styles.senderName}>{msg.name}</Text>}
+    //                 {msg.message ? <Text style={styles.messageText}>{msg.message}</Text> : null}
+    //                 {msg.fileUrl && (
+    //                     <div className="file-preview mb-2">
+    //                         {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
+    //                             <img
+    //                                 src={msg.fileUrl}
+    //                                 alt="uploaded"
+    //                                 className="img-thumbnail"
+    //                                 style={{ maxWidth: '200px', borderRadius: '8px' }}
+    //                             />
+    //                         ) : /\.(mp4|webm|ogg)$/i.test(msg.fileUrl) ? (
+    //                             <video
+    //                                 controls
+    //                                 poster={msg.thumbnailUrl}
+    //                                 style={{ display: 'block', maxWidth: '200px', borderRadius: '8px' }}
+    //                             >
+    //                                 <source src={msg.fileUrl} />
+    //                             </video>
+    //                         ) : (
+    //                             <a
+    //                                 href={msg.fileUrl}
+    //                                 download={msg.fileName || 'file'}
+    //                                 className="btn btn-sm btn-outline-primary"
+    //                             >
+    //                                 <i className="fas fa-file-download me-1" />
+    //                                 {msg.fileName || 'Tải xuống tài liệu'}
+    //                             </a>
+    //                         )}
+    //                     </div>
+    //                 )}
+
+    //                 {msg.reaction ? (
+    //                     <Text style={styles.reaction}>{emotions[msg.reaction - 1].icon}</Text>
+    //                 ) : null}
+    //             </View>
+    //             {!isMine && (
+    //                 <View style={styles.actionContainer}>
+    //                     <TouchableOpacity
+    //                         onPress={() =>
+    //                             setActiveEmotionMsgId(
+    //                                 getMessageId(msg) === activeEmotionMsgId ? null : getMessageId(msg)
+    //                             )
+    //                         }
+    //                     >
+    //                         <Text style={styles.emotionIcon}>😊</Text>
+    //                     </TouchableOpacity>
+    //                     {activeEmotionMsgId === getMessageId(msg) && (
+    //                         <View style={styles.emojiPickerRight}>
+    //                             {emotions.map(em => (
+    //                                 <TouchableOpacity
+    //                                     key={em.id}
+    //                                     onPress={() => {
+    //                                         onChooseEmotion(getMessageId(msg), em.id);
+    //                                         setActiveEmotionMsgId(null);
+    //                                     }}
+    //                                     style={styles.emojiButton}
+    //                                 >
+    //                                     <Text style={styles.emojiText}>{em.icon}</Text>
+    //                                 </TouchableOpacity>
+    //                             ))}
+    //                         </View>
+    //                     )}
+    //                 </View>
+    //             )}
+    //         </View>
+    //     );
+    // };
+
+
+    const formatTime = (timestamp) => {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+
+        if (diff < 24 * 60 * 60 * 1000) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        return date.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+    };
 
     const renderMessageItem = (msg) => {
         const isMine = msg.name === myname;
 
-        const formatTime = (timestamp) => {
-            if (!timestamp) return '';
-            const date = new Date(timestamp);
-            return date.toLocaleString([], {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-            });
-        };
-
         return (
-            <View key={getMessageId(msg)} style={[styles.messageItemContainer, { flexDirection: isMine ? 'row-reverse' : 'row' }]}>
-                {/* Nội dung tin nhắn */}
-                <View style={[styles.messageItem, { alignSelf: isMine ? 'flex-end' : 'flex-start' }]}>
-                    <View style={[styles.bubble, { backgroundColor: isMine ? "#dcf8c6" : "#fff" }]}>
-                        {msg.name !== myname && <Text style={styles.senderName}>{msg.name}</Text>}
-                        {msg.message ? <Text style={styles.messageText}>{msg.message}</Text> : null}
-                        {msg.fileUrl && (
-                            <View style={{ marginTop: 5 }}>
-                                {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
-                                    <Image
-                                        source={{ uri: msg.fileUrl }}
-                                        style={styles.image}
-                                    />
-                                ) : /\.(mp4|webm|ogg)$/i.test(msg.fileUrl) ? (
-                                    <Video
-                                        source={{ uri: msg.fileUrl }}
-                                        style={styles.video}
-                                        useNativeControls
-                                        resizeMode="contain"
-                                    />
-                                ) : (
-                                            <TouchableOpacity
-                                                onPress={() => {
-                                                    const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(msg.fileUrl)}&embedded=true`;
-                                                    Linking.openURL(googleViewerUrl);
-                                                }}
-                                            >
-                                                <Text style={styles.downloadLink}>
-                                                    {msg.fileName || 'Download File'}
-                                                </Text>
-                                            </TouchableOpacity>
-                                )}
+            <View key={getMessageId(msg)} style={[styles.messageItem, { alignSelf: isMine ? 'flex-end' : 'flex-start' }]}>
+                {isMine && (
+                    <View style={styles.actionContainer}>
+                        <TouchableOpacity
+                            onPress={() =>
+                                setActiveEmotionMsgId(
+                                    getMessageId(msg) === activeEmotionMsgId ? null : getMessageId(msg)
+                                )
+                            }
+                        >
+                            <Text style={styles.emotionIcon}>😊</Text>
+                        </TouchableOpacity>
+                        {activeEmotionMsgId === getMessageId(msg) && (
+                            <View style={styles.emojiPicker}>
+                                {emotions.map(em => (
+                                    <TouchableOpacity
+                                        key={em.id}
+                                        onPress={() => {
+                                            onChooseEmotion(getMessageId(msg), em.id);
+                                            setActiveEmotionMsgId(null);
+                                        }}
+                                        style={styles.emojiButton}
+                                    >
+                                        <Text style={styles.emojiText}>{em.icon}</Text>
+                                    </TouchableOpacity>
+                                ))}
                             </View>
                         )}
-                        <Text style={styles.timestamp}>{formatTime(msg.createdAt)}</Text>
-                        {msg.reaction && (
-                            <Text style={styles.reaction}>{emotions[msg.reaction - 1].icon}</Text>
-                        )}
-                    </View>
-                </View>
-
-                {/* Nút hành động */}
-                <View style={styles.actionButtonsContainer}>
-                    {/* Nút reaction */}
-                    <TouchableOpacity
-                        style={styles.reactionButton}
-                        onPress={() =>
-                            setActiveEmotionMsgId(
-                                getMessageId(msg) === activeEmotionMsgId ? null : getMessageId(msg)
-                            )
-                        }
-                    >
-                        <Text style={styles.reactionButtonText}>😊</Text>
-                    </TouchableOpacity>
-                    {/* Nút xóa */}
-                    {isMine && (
-                        <TouchableOpacity
-                            style={styles.deleteButton}
-                            onPress={() => handleDeleteMessage(getMessageId(msg), currentRoom)}
-                        >
-                            <Text style={styles.deleteButtonText}>Xóa</Text>
+                        <TouchableOpacity onPress={() => handleDeleteMessage(getMessageId(msg), msg.room)}>
+                            <Text style={styles.deleteButton}>X</Text>
                         </TouchableOpacity>
+                    </View>
+                )}
+
+                <View style={[styles.bubble, { backgroundColor: isMine ? "#dcf8c6" : "#fff" }]}>
+                    {msg.name !== myname && <Text style={styles.senderName}>{msg.name}</Text>}
+                    {msg.message ? <Text style={styles.messageText}>{msg.message}</Text> : null}
+
+                    {msg.fileUrl && (
+                        <View style={{ marginTop: 5 }}>
+                            {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
+                                <Image
+                                    source={{ uri: msg.fileUrl }}
+                                    style={{ width: 200, height: 200, borderRadius: 8 }}
+                                    resizeMode="cover"
+                                />
+                            ) : /\.(mp4|webm|ogg)$/i.test(msg.fileUrl) ? (
+                                <Video
+                                    source={{ uri: msg.fileUrl }}
+                                    style={{ width: 200, height: 200, borderRadius: 8 }}
+                                    controls
+                                />
+                            ) : (
+                                <TouchableOpacity onPress={() => Linking.openURL(msg.fileUrl)}>
+                                    <Text style={{ color: 'blue' }}>{msg.fileName || 'Tải xuống tài liệu'}</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     )}
+
+                    {msg.reaction && (
+                        <Text style={styles.reaction}>{emotions[msg.reaction - 1].icon}</Text>
+                    )}
+
+                    {/* ✅ Hiển thị thời gian gửi */}
+                    <Text style={styles.timeText}>{formatTime(msg.createdAt)}</Text>
                 </View>
 
-                {/* Picker cảm xúc */}
-                {activeEmotionMsgId === getMessageId(msg) && (
-                    <View style={styles.reactionPicker}>
-                        {emotions.map((emotion) => (
-                            <TouchableOpacity
-                                key={emotion.id}
-                                onPress={() => {
-                                    onChooseEmotion(getMessageId(msg), emotion.id);
-                                    setActiveEmotionMsgId(null);
-                                }}
-                            >
-                                <Text style={styles.emojiText}>{emotion.icon}</Text>
-                            </TouchableOpacity>
-                        ))}
+                {!isMine && (
+                    <View style={styles.actionContainer}>
+                        <TouchableOpacity
+                            onPress={() =>
+                                setActiveEmotionMsgId(
+                                    getMessageId(msg) === activeEmotionMsgId ? null : getMessageId(msg)
+                                )
+                            }
+                        >
+                            <Text style={styles.emotionIcon}>😊</Text>
+                        </TouchableOpacity>
+                        {activeEmotionMsgId === getMessageId(msg) && (
+                            <View style={styles.emojiPickerRight}>
+                                {emotions.map(em => (
+                                    <TouchableOpacity
+                                        key={em.id}
+                                        onPress={() => {
+                                            onChooseEmotion(getMessageId(msg), em.id);
+                                            setActiveEmotionMsgId(null);
+                                        }}
+                                        style={styles.emojiButton}
+                                    >
+                                        <Text style={styles.emojiText}>{em.icon}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
                     </View>
                 )}
             </View>
@@ -416,18 +534,7 @@ const styles = StyleSheet.create({
     },
     emojiButton: { marginHorizontal: 2 },
     emojiText: { fontSize: 18 },
-    deleteButton: {
-        marginTop: 5,
-        alignSelf: 'flex-end',
-        backgroundColor: '#ff4d4d',
-        padding: 5,
-        borderRadius: 5,
-    },
-    deleteButtonText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
+    deleteButton: { color: "red", marginLeft: 5 },
     bubble: {
         padding: 10,
         borderRadius: 10,
@@ -497,69 +604,11 @@ const styles = StyleSheet.create({
         borderRadius: 5,
         alignSelf: 'center',
         marginTop: 10
-    },
-    timestamp: {
-        fontSize: 12,
+    },timeText: {
+        fontSize: 10,
         color: '#888',
-        marginTop: 5,
-        textAlign: 'right',
-    },
-    reactionButton: {
-        marginTop: 5,
-        alignSelf: 'flex-end',
-        backgroundColor: '#f0f0f0',
-        padding: 5,
-        borderRadius: 5,
-    },
-    reactionButtonText: {
-        fontSize: 16,
-        color: '#888',
-    },
-    reactionPicker: {
-        flexDirection: 'row',
-        position: 'absolute',
-        bottom: -40,
-        right: 0,
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        padding: 5,
-        shadowColor: '#000',
-        shadowOpacity: 0.2,
-        shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    emojiText: {
-        fontSize: 20,
-        marginHorizontal: 5,
-    },
-    messageItemContainer: {
-        alignItems: 'flex-start',
-        marginBottom: 10,
-    },
-    actionButtonsContainer: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginHorizontal: 5,
-    },
-    reactionButton: {
-        backgroundColor: '#f0f0f0',
-        padding: 5,
-        borderRadius: 5,
-        marginBottom: 5,
-    },
-    reactionButtonText: {
-        fontSize: 16,
-        color: '#888',
-    },
-    deleteButton: {
-        backgroundColor: '#ff4d4d',
-        padding: 5,
-        borderRadius: 5,
-    },
-    deleteButtonText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
+        marginTop: 4,
+        alignSelf: 'flex-end'
+    }
+
 });
