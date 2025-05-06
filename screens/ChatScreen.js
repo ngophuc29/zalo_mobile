@@ -910,7 +910,74 @@ const ChatScreen = () => {
 
     const chatList = Object.keys(activeChats).map(room => ({ room, ...activeChats[room] }));
     const isSearching = searchFilter.trim().length > 0;
+    // Thêm useEffect để lắng nghe sự kiện xóa tin nhắn
+    useEffect(() => {
+        if (!socket) return;
 
+        const handleMessageDeleted = (data) => {
+            try {
+                const { messageId, room } = typeof data === 'string' ? JSON.parse(data) : data;
+
+                // Xóa tin nhắn khỏi danh sách messages
+                setMessages(prev => prev.filter(msg => getMessageId(msg) !== messageId));
+
+                // Cập nhật last message trong activeChats
+                setActiveChats(prev => {
+                    const updated = { ...prev };
+                    if (updated[room]) {
+                        // Tìm tin nhắn cuối cùng sau khi xóa
+                        const remainingMessages = messages.filter(msg => getMessageId(msg) !== messageId);
+                        if (remainingMessages.length > 0) {
+                            const lastMsg = remainingMessages[remainingMessages.length - 1];
+                            updated[room].lastMessage = {
+                                text: `${lastMsg.name === username ? 'Bạn' : lastMsg.name}: ${lastMsg.message || 'Đã gửi một tệp đính kèm'}`,
+                                time: lastMsg.createdAt
+                            };
+                        } else {
+                            // Nếu không còn tin nhắn nào
+                            updated[room].lastMessage = {
+                                text: 'Chưa có tin nhắn',
+                                time: null
+                            };
+                        }
+
+                        // Lưu vào AsyncStorage
+                        AsyncStorage.setItem('activeChats', JSON.stringify(updated))
+                            .catch(err => console.error("Error saving activeChats:", err));
+                    }
+                    return updated;
+                });
+            } catch (error) {
+                console.error("Error handling message deletion:", error);
+            }
+        };
+
+        const handleDeleteResult = (data) => {
+            try {
+                const result = typeof data === 'string' ? JSON.parse(data) : data;
+                showToast(
+                    "Xóa tin nhắn",
+                    result.success ? "Đã xóa tin nhắn thành công" : "Không thể xóa tin nhắn",
+                    result.success ? "success" : "error"
+                );
+            } catch (error) {
+                console.error("Error handling delete result:", error);
+            }
+        };
+
+        socket.on("messageDeleted", handleMessageDeleted);
+        socket.on("deleteMessageResult", handleDeleteResult);
+
+        return () => {
+            socket.off("messageDeleted", handleMessageDeleted);
+            socket.off("deleteMessageResult", handleDeleteResult);
+        };
+    }, [socket, username, messages]);
+
+    // Hàm xử lý xóa tin nhắn
+    const handleDeleteMessage = (msgId, room) => {
+        socket.emit("deleteMessage", { messageId: msgId, room });
+    };
     // Nếu đang chọn một chat, chuyển sang ChatContainer
     if (activeRoom) {
         return (
@@ -921,7 +988,8 @@ const ChatScreen = () => {
                 sendMessage={sendMessageHandler}
                 message={message}
                 setMessage={setMessage}
-                handleDeleteMessage={(msgId, room) => showToast("Delete", `Delete message ${msgId}`, "info")}
+                // handleDeleteMessage={(msgId, room) => showToast("Delete", `Delete message ${msgId}`, "info")}
+                handleDeleteMessage={handleDeleteMessage}
                 handleChooseEmotion={handleChooseEmotion}
                 activeEmotionMsgId={activeEmotionMsgId}
                 setActiveEmotionMsgId={setActiveEmotionMsgId}
