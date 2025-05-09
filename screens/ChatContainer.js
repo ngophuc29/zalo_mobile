@@ -119,6 +119,22 @@ const ChatContainer = ({
         setShowMediaUploader(false);
     };
 
+    const getDisplayName = (roomName) => {
+        if (!roomName) return '';
+        // Kiểm tra xem có phải là chat 1-1 không
+        if (roomName.includes('-')) {
+            // Chat 1-1: lấy tên partner (phần sau dấu -)
+            return roomName.split('-')[1];
+        } else {
+            // Group chat: bỏ dãy số phía sau dấu _
+            return roomName.split('_')[0];
+        }
+    };
+
+    const isGroupChat = (roomName) => {
+        return !roomName.includes('-');
+    };
+
     const onChooseEmotion = (msgId, emotionId) => {
         console.log("Chosen emotion:", { msgId, emotionId });
         handleChooseEmotion(msgId, emotionId);
@@ -286,8 +302,7 @@ const ChatContainer = ({
                     {msg.message ? <Text style={styles.messageText}>{msg.message}</Text> : null}
 
                     {msg.fileUrl && (
-                        <View style={{ marginTop: 5 }}>
-                            {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
+                        <View style={{ marginTop: 5 }}>                            {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
                                 <Image
                                     source={{ uri: msg.fileUrl }}
                                     style={{ width: 200, height: 200, borderRadius: 8 }}
@@ -297,7 +312,10 @@ const ChatContainer = ({
                                 <Video
                                     source={{ uri: msg.fileUrl }}
                                     style={{ width: 200, height: 200, borderRadius: 8 }}
-                                    controls
+                                    useNativeControls
+                                    resizeMode="contain"
+                                    shouldPlay={false}
+                                    isLooping={false}
                                 />
                             ) : (
                                 <TouchableOpacity onPress={() => Linking.openURL(msg.fileUrl)}>
@@ -350,15 +368,16 @@ const ChatContainer = ({
 
     return (
         <View style={styles.container}>
-            {/* Header với nút Back và Group Details */}
-            <View style={styles.headerContainer}>
+            {/* Header với nút Back và Group Details */}            <View style={styles.headerContainer}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
                     <Text style={styles.backButtonText}>👈</Text>
                 </TouchableOpacity>
-                <Text style={styles.roomHeader}>Chat Room: {currentRoom}</Text>
-                <TouchableOpacity style={styles.groupDetailsButton} onPress={onGetGroupDetails}>
-                    <Text style={styles.groupDetailsButtonText}>Group Details</Text>
-                </TouchableOpacity>
+                <Text style={styles.roomHeader}>{getDisplayName(currentRoom)}</Text>
+                {isGroupChat(currentRoom) && (
+                    <TouchableOpacity style={styles.groupDetailsButton} onPress={onGetGroupDetails}>
+                        <Text style={styles.groupDetailsButtonText}>Group Details</Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
             <FlatList
