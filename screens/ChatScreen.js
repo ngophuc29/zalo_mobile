@@ -15,8 +15,9 @@ import io from 'socket.io-client';
 import ChatContainer from './ChatContainer';
 import FriendModal from './FriendModal';
 import GroupChatModal from './GroupChatModal';
+import { FontSizes } from '../utils/fontScaling';
 
-const socket = io("http://localhost:5000");
+const socket = io("http://192.168.2.72:5000");
 
 const emotions = [
     { id: 1, icon: "❤️" },
@@ -29,6 +30,18 @@ const emotions = [
 // Thêm vào đầu file ChatScreen.js
 const DefaultAvatar = "https://ui-avatars.com/api/?background=random&name=";
 const GroupIcon = "👥"; // hoặc dùng image URL cho group icon
+
+// Hàm tiện ích để lấy avatar URL của user
+const getUserAvatarUrl = (username, accounts = [], avatar = null) => {
+    if (avatar) return avatar;  // If an avatar is explicitly provided
+    
+    // First try to find user in accounts array
+    const userAccount = accounts.find(acc => acc.username === username);
+    if (userAccount?.image) return userAccount.image;  // If user found and has image
+    
+    // Fallback to UI Avatars if no image found
+    return `${DefaultAvatar}${username}`; 
+};
 
 // Hàm tiện ích để lấy id của message dưới dạng string
 const getMessageId = (msg) => {
@@ -327,7 +340,7 @@ const ChatScreen = () => {
 
     // Lấy danh sách tài khoản (cho tìm kiếm và kết bạn)
     useEffect(() => {
-        fetch("http://localhost:5000/api/accounts")
+        fetch("http://192.168.2.72:5000/api/accounts")
             .then(res => res.json())
             .then(data => setAccounts(data))
             .catch(err => console.error("Error fetching accounts:", err));
@@ -1077,7 +1090,7 @@ const ChatScreen = () => {
                                         ) : (
                                             <Image 
                                                 source={{ 
-                                                    uri: item.avatar || `${DefaultAvatar}${item.partner}`
+                                                    uri: getUserAvatarUrl(item.partner, accounts, item.avatar)
                                                 }}
                                                 style={styles.avatar}
                                             />
@@ -1159,14 +1172,14 @@ const styles = StyleSheet.create({
     searchContainer: { flexDirection: "row", marginBottom: 10 },
     searchInput: { flex: 1, borderWidth: 1, borderColor: "#ddd", borderRadius: 4, padding: 8 },
     button: { backgroundColor: "#007bff", paddingVertical: 8, paddingHorizontal: 12, marginLeft: 8, borderRadius: 4, justifyContent: "center" },
-    buttonText: { color: "#fff" },
+    buttonText: { color: "#fff", fontSize: FontSizes.regular },
     listItem: { padding: 10, borderBottomWidth: 1, borderBottomColor: "#ddd" },
     itemLabel: { fontWeight: "bold" },
     itemValue: { fontWeight: "normal" },
     chatHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-    chatHeaderText: { fontSize: 24 },
+    chatHeaderText: { fontSize: FontSizes.heading },
     addButton: { backgroundColor: "#007bff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
-    addButtonText: { color: "#fff", fontSize: 24 },
+    addButtonText: { color: "#fff", fontSize: FontSizes.heading },
     chatItem: {
         flexDirection: 'row',
         padding: 12,
@@ -1183,7 +1196,7 @@ const styles = StyleSheet.create({
         borderRadius: 25,
     },
     groupIcon: {
-        fontSize: 35,
+        fontSize: FontSizes.jumbo,
         width: 50,
         height: 50,
         textAlign: 'center',
@@ -1201,11 +1214,11 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     chatName: {
-        fontSize: 16,
+        fontSize: FontSizes.medium,
         fontWeight: '600',
     },
     lastMessageTime: {
-        fontSize: 12,
+        fontSize: FontSizes.small,
         color: '#666',
     },
     lastMessageContainer: {
@@ -1214,7 +1227,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     lastMessageText: {
-        fontSize: 14,
+        fontSize: FontSizes.regular,
         color: '#666',
         flex: 1,
         marginRight: 8,
@@ -1234,9 +1247,9 @@ const styles = StyleSheet.create({
     },
     unreadText: {
         color: '#fff',
-        fontSize: 12,
+        fontSize: FontSizes.small,
         fontWeight: '600',
     },
     noChatsContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
-    noChatsText: { fontSize: 16, color: "#888" },
+    noChatsText: { fontSize: FontSizes.medium, color: "#888" },
 });

@@ -9,6 +9,7 @@ import {
     StyleSheet,
     Alert,
     Button,
+    FlatList,
 } from 'react-native';
 import EmojiSelector, { Categories } from 'react-native-emoji-selector';
 import GroupDetailsModal from './GroupDetailsModal';
@@ -360,9 +361,19 @@ const ChatContainer = ({
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.messageContainer} ref={scrollViewRef}>
-                {messages.map(msg => renderMessageItem(msg))}
-            </ScrollView>
+            <FlatList
+                style={styles.messageContainer}
+                ref={scrollViewRef}
+                data={messages}
+                keyExtractor={(msg) => getMessageId(msg)}
+                renderItem={({ item: msg }) => renderMessageItem(msg)}
+                onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+                ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>No messages yet.</Text>
+                    </View>
+                }
+            />
 
             <View style={styles.inputContainer}>
                 <TextInput
@@ -388,36 +399,23 @@ const ChatContainer = ({
 
             {showEmojiPicker && (
                 <View style={styles.emojiSelectorContainer}>
-                    <ScrollView contentContainerStyle={{ padding: 5 }}>
-                        <EmojiSelector
-                            onEmojiSelected={(emoji) => {
-                                setMessage(prev => prev + emoji);
-                                setShowEmojiPicker(false);
-                            }}
-                            showSearchBar={true}
-                            category={Categories.all}
-                        />
-                    </ScrollView>
+                    <EmojiSelector
+                        onEmojiSelected={(emoji) => {
+                            setMessage(prev => prev + emoji);
+                            setShowEmojiPicker(false);
+                        }}
+                        showSearchBar={true}
+                        category={Categories.all}
+                    />
                 </View>
             )}
-            {/* Image/File uploader overlay */}
+
             {showImageUploader && (
                 <View style={styles.uploaderOverlay}>
                     <ImageUploaderMobile onUploadSuccess={handleImageUploadSuccess} />
                     <Button title="Đóng" onPress={() => setShowImageUploader(false)} />
                 </View>
             )}
-
-            {/* {showFileUploader && (
-                <View style={styles.uploaderOverlay}>
-                    <FileUploader 
-                        onUploadSuccess={handleFileUploadSuccess}
-                         
-                    />
-                    <Button title="Đóng" onPress={() => setShowFileUploader(false)} />
-                </View>
-            )} */}
-
 
             {showFileUploader && (
                 <View style={styles.uploaderOverlay}>
@@ -491,7 +489,7 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOpacity: 0.3,
         shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 4,
+        shadowRadius: 4, overflow:'hidden'
     },
     imageUploaderContainer: {
         position: "absolute",

@@ -5,7 +5,6 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    ScrollView,
     StyleSheet,
     FlatList
 } from 'react-native';
@@ -88,7 +87,7 @@ const GroupDetailsModal = ({
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView style={styles.body}>
+                    <View style={styles.body}>
                         {/* Group info */}
                         <View style={styles.infoSection}>
                             <Text style={styles.infoText}>
@@ -106,9 +105,12 @@ const GroupDetailsModal = ({
                         </View>
 
                         {/* Member list with actions */}
-                        <View style={styles.memberList}>
-                            {Array.isArray(groupInfo.members) && groupInfo.members.map((member, idx) => (
-                                <View key={idx} style={styles.memberRow}>
+                        <FlatList
+                            style={styles.memberList}
+                            data={Array.isArray(groupInfo.members) ? groupInfo.members : []}
+                            keyExtractor={(item, index) => index.toString()}
+                            renderItem={({ item: member }) => (
+                                <View style={styles.memberRow}>
                                     <Text style={styles.memberName}>{member}</Text>
 
                                     {(isOwner || isDeputy) && member !== groupInfo.owner && member !== myname && (
@@ -147,8 +149,8 @@ const GroupDetailsModal = ({
                                         </>
                                     )}
                                 </View>
-                            ))}
-                        </View>
+                            )}
+                        />
 
                         {/* Add Member section */}
                         <View style={styles.addMemberSection}>
@@ -186,7 +188,6 @@ const GroupDetailsModal = ({
                                             </TouchableOpacity>
                                         )}
                                         style={styles.suggestionsList}
-                                        scrollEnabled={true}
                                         nestedScrollEnabled={true}
                                         showsVerticalScrollIndicator={true}
                                     />
@@ -210,7 +211,7 @@ const GroupDetailsModal = ({
                             </View>
                         )}
 
-                        <View style={{height:30,flex:1}}></View>
+                        <View style={{height: 30}}></View>
 
                         {/* Action buttons */}
                         <View style={styles.groupActions}>
@@ -231,7 +232,7 @@ const GroupDetailsModal = ({
                                 </TouchableOpacity>
                             )}
                         </View>
-                    </ScrollView>
+                    </View>
                 </View>
             </View>
         </Modal>

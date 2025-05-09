@@ -16,7 +16,7 @@ import { FontAwesome, MaterialIcons } from "@expo/vector-icons";
 import { io } from "socket.io-client";
 
 // Khởi tạo socket (đảm bảo dùng 1 instance chung)
-const socket = io("http://localhost:5000");
+const socket = io("http://192.168.2.72:5000");
 
 const menuItems = [
     { icon: "users", label: "Danh sách bạn bè" },
@@ -270,8 +270,8 @@ const ContactsScreen = () => {
                 ))}
             </View>
 
-            {/* Nội dung */}
-            <ScrollView style={styles.content}>
+            {/* Content */}
+            <View style={styles.content}>
                 {activeMenu === "Danh sách bạn bè" ? (
                     <>
                         <View style={styles.sectionHeader}>
@@ -283,7 +283,7 @@ const ContactsScreen = () => {
                                 data={sortedLetters}
                                 renderItem={renderFriendGroup}
                                 keyExtractor={(item) => item}
-                                scrollEnabled={false}
+                                ListEmptyComponent={<Text style={styles.emptyText}>Chưa có bạn bè.</Text>}
                             />
                         ) : (
                             <Text style={styles.emptyText}>Chưa có bạn bè.</Text>
@@ -295,19 +295,15 @@ const ContactsScreen = () => {
                             <Text style={styles.sectionTitle}>Lời mời</Text>
                             <Text style={styles.countText}>{friendRequests.length}</Text>
                         </View>
-                        {friendRequests.length ? (
-                            <FlatList
-                                data={friendRequests}
-                                renderItem={renderFriendRequest}
-                                keyExtractor={(item) => item._id || item.id}
-                                scrollEnabled={false}
-                            />
-                        ) : (
-                            <Text style={styles.emptyText}>Không có lời mời.</Text>
-                        )}
+                        <FlatList
+                            data={friendRequests}
+                            renderItem={renderFriendRequest}
+                            keyExtractor={(item) => item._id || item.id}
+                            ListEmptyComponent={<Text style={styles.emptyText}>Không có lời mời.</Text>}
+                        />
                     </>
                 )}
-            </ScrollView>
+            </View>
 
             {/* Modal confirm xóa bạn */}
             <Modal visible={confirmVisible} transparent animationType="slide">

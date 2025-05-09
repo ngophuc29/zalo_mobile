@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-const API_BASE = 'http://localhost:5000/api/accounts';
+const API_BASE = 'http://192.168.2.72:5000/api/accounts';
 
 const UserScreen = ({ navigation, myname ,setIsLoggedIn}) => {
     const [userInfo, setUserInfo] = useState({});

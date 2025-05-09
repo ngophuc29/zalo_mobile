@@ -13,7 +13,7 @@ import {
 import Toast from "react-native-toast-message";
 import { io } from "socket.io-client";
 
-// const socket = io("http://localhost:5000");
+// const socket = io("http://192.168.2.72:5000");
 
 const FriendModal = ({
     friendInput,

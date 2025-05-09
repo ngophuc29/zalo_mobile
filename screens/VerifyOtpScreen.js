@@ -27,7 +27,7 @@ const VerifyOtpScreen = () => {
         }
         setLoading(true);
         try {
-            const response = await axios.post('http://localhost:5000/api/accounts/verify-otp', {
+            const response = await axios.post('http://192.168.2.72:5000/api/accounts/verify-otp', {
                 email,
                 otp,
             });
