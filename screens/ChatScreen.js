@@ -26,7 +26,7 @@ const emotions = [
     { id: 4, icon: "😒" },
     { id: 5, icon: "😡" },
 ];
-
+import { MdGroupAdd } from "react-icons/md";
 // Thêm vào đầu file ChatScreen.js
 const DefaultAvatar = "https://ui-avatars.com/api/?background=random&name=";
 const GroupIcon = "👥"; // hoặc dùng image URL cho group icon
@@ -34,13 +34,13 @@ const GroupIcon = "👥"; // hoặc dùng image URL cho group icon
 // Hàm tiện ích để lấy avatar URL của user
 const getUserAvatarUrl = (username, accounts = [], avatar = null) => {
     if (avatar) return avatar;  // If an avatar is explicitly provided
-    
+
     // First try to find user in accounts array
     const userAccount = accounts.find(acc => acc.username === username);
     if (userAccount?.image) return userAccount.image;  // If user found and has image
-    
+
     // Fallback to UI Avatars if no image found
-    return `${DefaultAvatar}${username}`; 
+    return `${DefaultAvatar}${username}`;
 };
 
 // Hàm tiện ích để lấy id của message dưới dạng string
@@ -63,21 +63,21 @@ const showToast = (title, message, type = 'info') => {
 // Thêm vào ChatScreen.js
 const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    
+
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
-    
+
     // Nếu là today
     if (diff < 24 * 60 * 60 * 1000) {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
-    
+
     // Nếu là tuần này
     if (diff < 7 * 24 * 60 * 60 * 1000) {
         return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
     }
-    
+
     // Còn lại hiện ngày tháng
     return date.toLocaleDateString();
 };
@@ -620,7 +620,7 @@ const ChatScreen = () => {
         const onNewMessage = (data) => {
             try {
                 const newMsg = JSON.parse(data);
-                
+
                 // Cập nhật activeChats ngay khi có tin nhắn mới
                 setActiveChats(prev => {
                     const updated = { ...prev };
@@ -634,8 +634,8 @@ const ChatScreen = () => {
                                 time: new Date().toISOString()
                             },
                             // Tăng unread nếu không phải room hiện tại
-                            unread: roomId !== currentRoomRef.current 
-                                ? (updated[roomId].unread || 0) + 0.5 
+                            unread: roomId !== currentRoomRef.current
+                                ? (updated[roomId].unread || 0) + 0.5
                                 : 0
                         };
 
@@ -661,7 +661,7 @@ const ChatScreen = () => {
         };
 
         socket.on("thread", onNewMessage);
-        
+
         return () => {
             socket.off("thread", onNewMessage);
         };
@@ -1067,8 +1067,9 @@ const ChatScreen = () => {
                 <View style={{ flex: 1 }}>
                     <View style={styles.chatHeader}>
                         <Text style={styles.chatHeaderText}>Chats</Text>
-                        <TouchableOpacity style={styles.addButton} onPress={() => setGroupModalVisible(true)}>
-                            <Text style={styles.addButtonText}> </Text>
+                            <TouchableOpacity style={[styles.addButton, { backgroundColor:'transparent'}]} onPress={() => setGroupModalVisible(true)}>
+                            <Text style={[styles.addButtonText, { color: '#000' }]}
+                            >   <MdGroupAdd size={20} /> </Text>
                         </TouchableOpacity>
                     </View>
                     {chatList.length === 0 ? (
@@ -1088,15 +1089,15 @@ const ChatScreen = () => {
                                         {item.isGroup ? (
                                             <Text style={styles.groupIcon}>{GroupIcon}</Text>
                                         ) : (
-                                            <Image 
-                                                source={{ 
+                                            <Image
+                                                source={{
                                                     uri: getUserAvatarUrl(item.partner, accounts, item.avatar)
                                                 }}
                                                 style={styles.avatar}
                                             />
                                         )}
                                     </View>
-                                    
+
                                     <View style={styles.chatInfo}>
                                         <View style={styles.chatHeader}>
                                             <Text style={styles.chatName}>
@@ -1106,10 +1107,10 @@ const ChatScreen = () => {
                                                 {formatTime(item.lastMessage?.time)}
                                             </Text>
                                         </View>
-                                        
+
                                         <View style={styles.lastMessageContainer}>
-                                            <Text 
-                                                numberOfLines={1} 
+                                            <Text
+                                                numberOfLines={1}
                                                 style={[
                                                     styles.lastMessageText,
                                                     item.unread > 0 && styles.unreadMessage
@@ -1129,8 +1130,7 @@ const ChatScreen = () => {
                         />
                     )}
                 </View>
-            )}
-            {groupModalVisible && (
+            )}            {groupModalVisible && (
                 <GroupChatModal
                     groupName={groupName}
                     setGroupName={setGroupName}
@@ -1140,6 +1140,7 @@ const ChatScreen = () => {
                     myname={username}
                     setGroupModalVisible={setGroupModalVisible}
                     handleCreateGroup={handleCreateGroup}
+                    friends={friends}
                 />
             )}
             {friendModalVisible && (
@@ -1178,7 +1179,7 @@ const styles = StyleSheet.create({
     itemValue: { fontWeight: "normal" },
     chatHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
     chatHeaderText: { fontSize: FontSizes.heading },
-    addButton: { backgroundColor: "#007bff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
+    addButton: { backgroundColor: "#007bff", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, justifyContent: 'center', alignItems: 'center' },
     addButtonText: { color: "#fff", fontSize: FontSizes.heading },
     chatItem: {
         flexDirection: 'row',

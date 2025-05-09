@@ -18,6 +18,7 @@ const GroupChatModal = ({
     myname,
     setGroupModalVisible,
     handleCreateGroup,
+    friends,
 }) => {
     return (
         <Modal
@@ -30,19 +31,25 @@ const GroupChatModal = ({
                 style={styles.modalOverlay}
                 activeOpacity={1}
                 onPressOut={() => setGroupModalVisible(false)}
-            >
-                <View style={styles.modalContainer}>
-                    <Text style={styles.modalTitle}>Tạo Nhóm Chat</Text>
+            >                <View style={styles.modalContainer}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Tạo Nhóm Chat</Text>
+                        <TouchableOpacity
+                            style={styles.closeButton}
+                            onPress={() => setGroupModalVisible(false)}
+                        >
+                            <Text style={styles.closeButtonText}>✕</Text>
+                        </TouchableOpacity>
+                    </View>
                     <TextInput
                         style={styles.input}
                         placeholder="Tên nhóm chat"
                         value={groupName}
                         onChangeText={setGroupName}
                     />
-                    <Text style={styles.subtitle}>Chọn thành viên:</Text>
-                    <ScrollView style={styles.membersContainer}>
+                    <Text style={styles.subtitle}>Chọn thành viên:</Text>                    <ScrollView style={styles.membersContainer}>
                         {accounts
-                            .filter((acc) => acc.username !== myname)
+                            .filter((acc) => acc.username !== myname && friends.includes(acc.username))
                             .map((account, idx) => (
                                 <TouchableOpacity
                                     key={idx}
@@ -62,9 +69,25 @@ const GroupChatModal = ({
                                     )}
                                 </TouchableOpacity>
                             ))}
-                    </ScrollView>
-                    <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
-                        <Text style={styles.createButtonText}>Tạo Nhóm</Text>
+                        {accounts.filter(acc => acc.username !== myname && friends.includes(acc.username)).length === 0 && (
+                            <View style={styles.noFriendsContainer}>
+                                <Text style={styles.noFriendsText}>Bạn cần có ít nhất một người bạn để tạo nhóm chat</Text>
+                            </View>
+                        )}
+                    </ScrollView>                    <TouchableOpacity 
+                        style={[
+                            styles.createButton, 
+                            selectedMembers.length < 2 && styles.createButtonDisabled
+                        ]} 
+                        onPress={handleCreateGroup}
+                        disabled={selectedMembers.length < 2}
+                    >
+                        <Text style={styles.createButtonText}>
+                            {selectedMembers.length < 2 
+                                ? `Chọn thêm ${2 - selectedMembers.length} thành viên` 
+                                : "Tạo Nhóm"
+                            }
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -129,9 +152,42 @@ const styles = StyleSheet.create({
         borderRadius: 4,
         alignItems: 'center',
     },
+    createButtonDisabled: {
+        backgroundColor: '#cccccc',
+    },
     createButtonText: {
         color: '#fff',
         fontSize: 16,
+    },
+    noFriendsContainer: {
+        padding: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    noFriendsText: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    closeButton: {
+        padding: 5,
+        borderRadius: 15,
+        backgroundColor: '#f0f0f0',
+        width: 30,
+        height: 30,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    closeButtonText: {
+        fontSize: 16,
+        color: '#666',
+        fontWeight: 'bold',
     },
 });
 
