@@ -10,15 +10,16 @@ import {
     Alert,
     Button,
     FlatList,
+    Linking
 } from 'react-native';
 import EmojiSelector, { Categories } from 'react-native-emoji-selector';
 import GroupDetailsModal from './GroupDetailsModal';
 import { Video } from 'expo-av';
-import FileUploaderMobile from './FileUploaderMobile';
+
 import ImageUploaderMobile from './ImageUploaderMobile';
 import FileUploader from './FileUploaderMobile';
-// Thêm vào phần import
 import { ActivityIndicator } from 'react-native';
+
 const ChatContainer = ({
     currentRoom,
     messages,
@@ -34,8 +35,6 @@ const ChatContainer = ({
     getMessageId,
     onGetGroupDetails,
     onBack,
-
-    // Group chat related props
     groupDetailsVisible,
     groupInfo,
     handleRemoveGroupMember,
@@ -52,6 +51,7 @@ const ChatContainer = ({
     const [showImageUploader, setShowImageUploader] = useState(false);
     const [showFileUploader, setShowFileUploader] = useState(false);
     const [showMediaUploader, setShowMediaUploader] = useState(false);
+    const [replyingTo, setReplyingTo] = useState(null);
     const scrollViewRef = useRef();
 
     useEffect(() => {
@@ -70,41 +70,87 @@ const ChatContainer = ({
                 id: Date.now(),
                 name: myname,
                 message: message,
-                room: currentRoom, createdAt: new Date().toISOString(),
+                room: currentRoom,
+                createdAt: new Date().toISOString(),
             };
+
+            // CHỈ thêm replyTo nếu đang thực sự reply
+            if (replyingTo) {
+                msgObj.replyTo = replyingTo;
+            }
+
             sendMessage(msgObj);
             setMessage('');
+            setReplyingTo(null); // Reset sau khi gửi
         }
         setShowEmojiPicker(false);
     };
 
-    // Xử lý khi upload thành công
-    const handleImageUploadSuccess = (url) => {
-        sendMessage({
-            id: Date.now(),
-            name: myname,
-            message: '',
-            room: currentRoom,
-            fileUrl: url,
-            fileType: 'image'
+    const handleReply = (msg) => {
+        setReplyingTo({
+            id: msg._id || msg.id,
+            name: msg.name,
+            message: msg.message || '', // Đảm bảo không bị undefined
+            fileUrl: msg.fileUrl || null,
+            fileName: msg.fileName || null,
+            fileType: msg.fileType || null
         });
-        setShowImageUploader(false);
     };
-    // Xử lý khi upload thành công
-    const handleFileUploadSuccess = (fileData) => {
-        sendMessage({
+
+    const handleCancelReply = () => {
+        setReplyingTo(null);
+    };
+
+    const handleImageUploadSuccess = (imageUrl) => {
+        const fileMessage = {
             id: Date.now(),
             name: myname,
-            message: '',
+            message: "", // Có thể thêm text nếu cần
+            room: currentRoom,
+            fileUrl: imageUrl,
+            fileType: 'image',
+            createdAt: new Date().toISOString()
+        };
+
+        // Thêm replyTo nếu đang reply
+        if (replyingTo) {
+            fileMessage.replyTo = replyingTo;
+        }
+
+        sendMessage(fileMessage);
+        setShowImageUploader(false);
+        setReplyingTo(null); // Reset reply sau khi gửi
+    };
+
+    const handleFileUploadSuccess = (fileData) => {
+        const fileMessage = {
+            id: Date.now(),
+            name: myname,
+            message: "",
             room: currentRoom,
             fileUrl: fileData.url,
             fileType: fileData.type,
             fileName: fileData.name,
-            fileSize: fileData.size
-        });
+            fileSize: fileData.size,
+            createdAt: new Date().toISOString()
+        };
+
+        if (replyingTo) {
+            fileMessage.replyTo = {
+                id: replyingTo.id,
+                name: replyingTo.name,
+                message: replyingTo.message,
+                fileUrl: replyingTo.fileUrl,
+                fileName: replyingTo.fileName,
+                fileType: replyingTo.fileType
+            };
+        }
+
+        sendMessage(fileMessage);
         setShowFileUploader(false);
-    }
-    // Hàm xử lý khi MediaUploader upload thành công
+        setReplyingTo(null);
+    };
+
     const handleMediaUploadSuccess = (fileData) => {
         sendMessage({
             id: Date.now(),
@@ -121,12 +167,9 @@ const ChatContainer = ({
 
     const getDisplayName = (roomName) => {
         if (!roomName) return '';
-        // Kiểm tra xem có phải là chat 1-1 không
         if (roomName.includes('-')) {
-            // Chat 1-1: lấy tên partner (phần sau dấu -)
             return roomName.split('-')[1];
         } else {
-            // Group chat: bỏ dãy số phía sau dấu _
             return roomName.split('_')[0];
         }
     };
@@ -136,116 +179,8 @@ const ChatContainer = ({
     };
 
     const onChooseEmotion = (msgId, emotionId) => {
-        console.log("Chosen emotion:", { msgId, emotionId });
         handleChooseEmotion(msgId, emotionId);
     };
-     
-    // const renderMessageItem = (msg) => {
-    //     const isMine = msg.name === myname;
-    //     return (
-    //         <View key={getMessageId(msg)} style={[styles.messageItem, { alignSelf: isMine ? 'flex-end' : 'flex-start' }]}>
-    //             {isMine && (
-    //                 <View style={styles.actionContainer}>
-    //                     <TouchableOpacity
-    //                         onPress={() =>
-    //                             setActiveEmotionMsgId(
-    //                                 getMessageId(msg) === activeEmotionMsgId ? null : getMessageId(msg)
-    //                             )
-    //                         }
-    //                     >
-    //                         <Text style={styles.emotionIcon}>😊</Text>
-    //                     </TouchableOpacity>
-    //                     {activeEmotionMsgId === getMessageId(msg) && (
-    //                         <View style={styles.emojiPicker}>
-    //                             {emotions.map(em => (
-    //                                 <TouchableOpacity
-    //                                     key={em.id}
-    //                                     onPress={() => {
-    //                                         onChooseEmotion(getMessageId(msg), em.id);
-    //                                         setActiveEmotionMsgId(null);
-    //                                     }}
-    //                                     style={styles.emojiButton}
-    //                                 >
-    //                                     <Text style={styles.emojiText}>{em.icon}</Text>
-    //                                 </TouchableOpacity>
-    //                             ))}
-    //                         </View>
-    //                     )}
-    //                     <TouchableOpacity onPress={() => handleDeleteMessage(getMessageId(msg), msg.room)}>
-    //                         <Text style={styles.deleteButton}>X</Text>
-    //                     </TouchableOpacity>
-    //                 </View>
-    //             )}
-    //             <View style={[styles.bubble, { backgroundColor: isMine ? "#dcf8c6" : "#fff" }]}>
-    //                 {msg.name !== myname && <Text style={styles.senderName}>{msg.name}</Text>}
-    //                 {msg.message ? <Text style={styles.messageText}>{msg.message}</Text> : null}
-    //                 {msg.fileUrl && (
-    //                     <div className="file-preview mb-2">
-    //                         {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
-    //                             <img
-    //                                 src={msg.fileUrl}
-    //                                 alt="uploaded"
-    //                                 className="img-thumbnail"
-    //                                 style={{ maxWidth: '200px', borderRadius: '8px' }}
-    //                             />
-    //                         ) : /\.(mp4|webm|ogg)$/i.test(msg.fileUrl) ? (
-    //                             <video
-    //                                 controls
-    //                                 poster={msg.thumbnailUrl}
-    //                                 style={{ display: 'block', maxWidth: '200px', borderRadius: '8px' }}
-    //                             >
-    //                                 <source src={msg.fileUrl} />
-    //                             </video>
-    //                         ) : (
-    //                             <a
-    //                                 href={msg.fileUrl}
-    //                                 download={msg.fileName || 'file'}
-    //                                 className="btn btn-sm btn-outline-primary"
-    //                             >
-    //                                 <i className="fas fa-file-download me-1" />
-    //                                 {msg.fileName || 'Tải xuống tài liệu'}
-    //                             </a>
-    //                         )}
-    //                     </div>
-    //                 )}
-
-    //                 {msg.reaction ? (
-    //                     <Text style={styles.reaction}>{emotions[msg.reaction - 1].icon}</Text>
-    //                 ) : null}
-    //             </View>
-    //             {!isMine && (
-    //                 <View style={styles.actionContainer}>
-    //                     <TouchableOpacity
-    //                         onPress={() =>
-    //                             setActiveEmotionMsgId(
-    //                                 getMessageId(msg) === activeEmotionMsgId ? null : getMessageId(msg)
-    //                             )
-    //                         }
-    //                     >
-    //                         <Text style={styles.emotionIcon}>😊</Text>
-    //                     </TouchableOpacity>
-    //                     {activeEmotionMsgId === getMessageId(msg) && (
-    //                         <View style={styles.emojiPickerRight}>
-    //                             {emotions.map(em => (
-    //                                 <TouchableOpacity
-    //                                     key={em.id}
-    //                                     onPress={() => {
-    //                                         onChooseEmotion(getMessageId(msg), em.id);
-    //                                         setActiveEmotionMsgId(null);
-    //                                     }}
-    //                                     style={styles.emojiButton}
-    //                                 >
-    //                                     <Text style={styles.emojiText}>{em.icon}</Text>
-    //                                 </TouchableOpacity>
-    //                             ))}
-    //                         </View>
-    //                     )}
-    //                 </View>
-    //             )}
-    //         </View>
-    //     );
-    // };
-
 
     const formatTime = (timestamp) => {
         if (!timestamp) return '';
@@ -266,6 +201,10 @@ const ChatContainer = ({
             <View key={getMessageId(msg)} style={[styles.messageItem, { alignSelf: isMine ? 'flex-end' : 'flex-start' }]}>
                 {isMine && (
                     <View style={styles.actionContainer}>
+                        <TouchableOpacity onPress={() => handleReply(msg)}>
+                            <Text style={styles.actionIcon}>↩️</Text>
+                        </TouchableOpacity>
+
                         <TouchableOpacity
                             onPress={() =>
                                 setActiveEmotionMsgId(
@@ -299,10 +238,64 @@ const ChatContainer = ({
 
                 <View style={[styles.bubble, { backgroundColor: isMine ? "#dcf8c6" : "#fff" }]}>
                     {msg.name !== myname && <Text style={styles.senderName}>{msg.name}</Text>}
+
+                    {msg.replyTo && msg.replyTo.id && msg.replyTo.name && (msg.replyTo.message || msg.replyTo.fileUrl) && (() => {
+                        const originalExists = messages.some(
+                            m => (m._id === msg.replyTo.id || m.id === msg.replyTo.id)
+                        );
+
+                        return (
+                            <View style={styles.replyPreview}>
+                                <Text style={styles.replyToText}>Replying to {msg.replyTo.name}</Text>
+
+                                {msg.replyTo.message ? (
+                                    // --- Text reply ---
+                                    <Text style={[
+                                        styles.replyMessageText,
+                                        !originalExists && styles.deletedReply
+                                    ]}>
+                                        {originalExists
+                                            ? msg.replyTo.message
+                                            : "Tin nhắn đã bị xóa"}
+                                    </Text>
+
+                                ) : msg.replyTo.fileUrl ? (
+                                    // --- File reply ---
+                                    !originalExists ? (
+                                        // File gốc đã bị xóa
+                                        <Text style={[styles.replyFileText, styles.deletedReply]}>
+                                            Tin nhắn đã bị xóa
+                                        </Text>
+                                    ) : (
+                                        // File gốc còn, render preview
+                                        <View style={styles.replyFilePreview}>
+                                            {/\.(jpe?g|png|gif|webp)$/i.test(msg.replyTo.fileUrl) ? (
+                                                <Image
+                                                    source={{ uri: msg.replyTo.fileUrl }}
+                                                    style={styles.replyFileImage}
+                                                />
+                                            ) : /\.(mp4|webm|ogg)$/i.test(msg.replyTo.fileUrl) ? (
+                                                <View style={styles.replyVideoContainer}>
+                                                    <Text style={styles.replyFileText}>[Video]</Text>
+                                                </View>
+                                            ) : (
+                                                <Text style={styles.replyFileText}>
+                                                    [File] {msg.replyTo.fileName || 'Tệp đính kèm'}
+                                                </Text>
+                                            )}
+                                        </View>
+                                    )
+                                ) : null}
+                            </View>
+                        );
+                    })()}
+
+
                     {msg.message ? <Text style={styles.messageText}>{msg.message}</Text> : null}
 
                     {msg.fileUrl && (
-                        <View style={{ marginTop: 5 }}>                            {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
+                        <View style={{ marginTop: 5 }}>
+                            {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
                                 <Image
                                     source={{ uri: msg.fileUrl }}
                                     style={{ width: 200, height: 200, borderRadius: 8 }}
@@ -318,9 +311,20 @@ const ChatContainer = ({
                                     isLooping={false}
                                 />
                             ) : (
-                                <TouchableOpacity onPress={() => Linking.openURL(msg.fileUrl)}>
-                                    <Text style={{ color: 'blue' }}>{msg.fileName || 'Tải xuống tài liệu'}</Text>
-                                </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => Linking.openURL(msg.fileUrl)}
+                                            style={styles.fileContainer}
+                                        >
+                                            <Text style={styles.fileIcon}>📄</Text>
+                                            <View style={styles.fileInfo}>
+                                                <Text style={styles.fileName}>
+                                                    {msg.fileName || msg.name || 'Tệp đính kèm'}
+                                                </Text>
+                                                <Text style={styles.fileSize}>
+                                                    {msg.fileSize ? `(${(msg.fileSize / 1024).toFixed(2)} KB)` : ''}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
                             )}
                         </View>
                     )}
@@ -329,12 +333,15 @@ const ChatContainer = ({
                         <Text style={styles.reaction}>{emotions[msg.reaction - 1].icon}</Text>
                     )}
 
-                    {/* ✅ Hiển thị thời gian gửi */}
                     <Text style={styles.timeText}>{formatTime(msg.createdAt)}</Text>
                 </View>
 
                 {!isMine && (
                     <View style={styles.actionContainer}>
+                        <TouchableOpacity onPress={() => handleReply(msg)}>
+                            <Text style={styles.actionIcon}>↩️</Text>
+                        </TouchableOpacity>
+
                         <TouchableOpacity
                             onPress={() =>
                                 setActiveEmotionMsgId(
@@ -368,7 +375,7 @@ const ChatContainer = ({
 
     return (
         <View style={styles.container}>
-            {/* Header với nút Back và Group Details */}            <View style={styles.headerContainer}>
+            <View style={styles.headerContainer}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
                     <Text style={styles.backButtonText}>👈</Text>
                 </TouchableOpacity>
@@ -395,6 +402,23 @@ const ChatContainer = ({
             />
 
             <View style={styles.inputContainer}>
+                {replyingTo && replyingTo.id && replyingTo.name && (replyingTo.message || replyingTo.fileUrl) && (
+                    <View style={styles.replyIndicator}>
+                        <Text style={styles.replyIndicatorText}>
+                            Replying to {replyingTo.name}:
+                            {replyingTo.message
+                                ? ` ${replyingTo.message.substring(0, 20)}${replyingTo.message.length > 20 ? '...' : ''}`
+                                : replyingTo.fileUrl
+                                    ? ` [${replyingTo.fileType?.startsWith('image') ? 'Hình ảnh' :
+                                        replyingTo.fileType?.startsWith('video') ? 'Video' : 'File'}]`
+                                    : ''}
+                        </Text>
+                        <TouchableOpacity onPress={handleCancelReply}>
+                            <Text style={styles.cancelReplyText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 <TextInput
                     style={styles.input}
                     placeholder="Enter your message"
@@ -479,8 +503,6 @@ const ChatContainer = ({
     );
 };
 
-export default ChatContainer;
-
 const styles = StyleSheet.create({
     container: { flex: 1, padding: 10, backgroundColor: "#fff" },
     headerContainer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -490,8 +512,8 @@ const styles = StyleSheet.create({
     groupDetailsButton: { backgroundColor: "#6c757d", padding: 8, borderRadius: 4 },
     groupDetailsButtonText: { color: "#fff" },
     messageContainer: { flex: 1, marginVertical: 10 },
-    inputContainer: { flexDirection: "row", alignItems: "center" },
-    input: { flex: 1, borderWidth: 1, borderColor: "#ddd", borderRadius: 4, padding: 8 },
+    inputContainer: { flexDirection: "row", alignItems: "center", flexWrap: 'wrap' },
+    input: { flex: 1, borderWidth: 1, borderColor: "#ddd", borderRadius: 4, padding: 8, minWidth: '60%' },
     sendButton: { backgroundColor: "#007bff", padding: 10, marginLeft: 5, borderRadius: 4 },
     sendButtonText: { color: "#fff" },
     secondaryButton: { backgroundColor: "#6c757d", padding: 10, marginLeft: 5, borderRadius: 4 },
@@ -508,28 +530,12 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOpacity: 0.3,
         shadowOffset: { width: 0, height: 2 },
-        shadowRadius: 4, overflow:'hidden'
+        shadowRadius: 4,
+        overflow: 'hidden'
     },
-    imageUploaderContainer: {
-        position: "absolute",
-        bottom: 60,
-        left: 20,
-        backgroundColor: "#f9f9f9",
-        padding: 10,
-        borderRadius: 10
-    },
-    fileUploaderContainer: {
-        position: "absolute",
-        bottom: 60,
-        left: 20,
-        backgroundColor: "#f9f9f9",
-        padding: 10,
-        borderRadius: 10
-    },
-    uploadPrompt: { marginBottom: 5 },
-    uploadButton: { color: "#007bff" },
     messageItem: { marginBottom: 10, maxWidth: "80%" },
     actionContainer: { flexDirection: "row", alignItems: "center" },
+    actionIcon: { fontSize: 16, marginRight: 5 },
     emotionIcon: { fontSize: 20, marginRight: 5 },
     emojiPicker: {
         flexDirection: "row",
@@ -564,9 +570,6 @@ const styles = StyleSheet.create({
     },
     senderName: { fontWeight: "bold", marginBottom: 2 },
     messageText: { margin: 0 },
-    image: { width: 200, height: 200, borderRadius: 5, marginTop: 5 },
-    video: { width: 200, height: 200, borderRadius: 5, marginTop: 5 },
-    downloadLink: { color: "blue", textDecorationLine: "underline", marginTop: 5 },
     reaction: {
         position: "absolute",
         bottom: -10,
@@ -575,21 +578,6 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         padding: 3,
         color: "#fff"
-    },
-    imageUploaderOverlay: {
-        position: 'absolute',
-        bottom: 60,
-        left: 20,
-        right: 20,
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        padding: 10,
-        elevation: 5,
-        zIndex: 1000,
-    },
-    closeUploaderBtn: {
-        marginTop: 8,
-        alignSelf: 'flex-end',
     },
     uploaderOverlay: {
         position: 'absolute',
@@ -606,26 +594,129 @@ const styles = StyleSheet.create({
         marginTop: 8,
         alignSelf: 'flex-end',
     },
-    uploadingIndicator: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 10,
-        backgroundColor: '#f5f5f5',
-        borderRadius: 5,
-        marginTop: 10
-    },
-    closeBtn: {
-        backgroundColor: '#f0f0f0',
-        padding: 8,
-        borderRadius: 5,
-        alignSelf: 'center',
-        marginTop: 10
-    },timeText: {
+    timeText: {
         fontSize: 10,
         color: '#888',
         marginTop: 4,
         alignSelf: 'flex-end'
-    }
+    },
+    // Style cho reply
+    replyPreview: {
+        backgroundColor: '#f0f0f0',
+        padding: 8,
+        borderRadius: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: '#007bff',
+        marginBottom: 5,
+    },
+    replyToText: {
+        fontSize: 12,
+        color: '#666',
+    },
+    replyMessageText: {
+        fontSize: 12,
+        color: '#333',
+    },
+    deletedReply: {
+        fontStyle: 'italic',
+        color: '#888',
+    },
+    replyIndicator: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#f0f0f0',
+        padding: 8,
+        borderRadius: 8,
+        marginBottom: 5,
+        width: '100%',
+    },
+    replyIndicatorText: {
+        fontSize: 12,
+        flex: 1,
+    },
+    cancelReplyText: {
+        color: 'red',
+        marginLeft: 10,
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    emptyText: {
+        fontSize: 16,
+        color: '#888'
+    },
+    replyFilePreview: {
+        marginTop: 4,
+    },
+    replyFileImage: {
+        width: 60,
+        height: 60,
+        borderRadius: 4,
+    },
+    replyVideoContainer: {
+        width: 60,
+        height: 60,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#e0e0e0',
+        borderRadius: 4,
+    },
+    replyFileText: {
+        fontSize: 12,
+        color: '#333',
+        fontStyle: 'italic',
+    },
+    // Thêm vào styles
+    replyFileImage: {
+        width: 60,
+        height: 60,
+        borderRadius: 4,
+    },
+    replyVideoContainer: {
+        width: 60,
+        height: 60,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#e0e0e0',
+        borderRadius: 4,
+    },
+    replyFileText: {
+        fontSize: 12,
+        color: '#333',
+        fontStyle: 'italic',
+    }, fileContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 8,
+        backgroundColor: '#f5f5f5',
+        borderRadius: 8,
+    },
+    fileIcon: {
+        fontSize: 24,
+        marginRight: 8,
+    },
+    fileInfo: {
+        flex: 1,
+    },
+    fileName: {
+        color: 'blue',
+        fontWeight: 'bold',
+    },
+    fileSize: {
+        fontSize: 12,
+        color: '#666',
+    },
 
+    // Format thời gian thống nhất với web
+    timeText: {
+        fontSize: 12,
+        color: '#888',
+        marginTop: 4,
+        alignSelf: 'flex-end'
+      },
 });
+
+export default ChatContainer;

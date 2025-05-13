@@ -110,7 +110,7 @@ export default function FileUploader({ onUploadSuccess }) {
                 body: formData,
             });
             const data = await res.json();
-
+          
             if (data.secure_url) {
                 onUploadSuccess?.({
                     url: data.secure_url,
