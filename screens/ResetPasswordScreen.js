@@ -37,7 +37,7 @@ const ResetPasswordScreen = () => {
 
         setLoading(true);
         try {
-            const response = await axios.post('http://192.168.2.72:5000/api/accounts/reset-password', {
+            const response = await axios.post('http://localhost:5000/api/accounts/reset-password', {
                 email,
                 newPassword,
             });

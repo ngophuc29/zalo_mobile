@@ -10,7 +10,8 @@ import {
     Alert,
     Button,
     FlatList,
-    Linking
+    Linking,
+    Modal
 } from 'react-native';
 import EmojiSelector, { Categories } from 'react-native-emoji-selector';
 import GroupDetailsModal from './GroupDetailsModal';
@@ -53,6 +54,8 @@ const ChatContainer = ({
     const [showMediaUploader, setShowMediaUploader] = useState(false);
     const [replyingTo, setReplyingTo] = useState(null);
     const scrollViewRef = useRef();
+    const [deleteConfirmMsgId, setDeleteConfirmMsgId] = useState(null);
+    const [deleteConfirmRoom, setDeleteConfirmRoom] = useState(null);
 
     useEffect(() => {
         if (scrollViewRef.current) {
@@ -230,7 +233,10 @@ const ChatContainer = ({
                                 ))}
                             </View>
                         )}
-                        <TouchableOpacity onPress={() => handleDeleteMessage(getMessageId(msg), msg.room)}>
+                        <TouchableOpacity onPress={() => {
+                            setDeleteConfirmMsgId(getMessageId(msg));
+                            setDeleteConfirmRoom(msg.room);
+                        }}>
                             <Text style={styles.deleteButton}>X</Text>
                         </TouchableOpacity>
                     </View>
@@ -498,6 +504,33 @@ const ChatContainer = ({
                     handleDisbandGroup={handleDisbandGroup}
                     allUsers={allUsers}
                 />
+            )}
+
+            {deleteConfirmMsgId && (
+                <Modal
+                    transparent
+                    animationType="fade"
+                    visible={!!deleteConfirmMsgId}
+                    onRequestClose={() => setDeleteConfirmMsgId(null)}
+                >
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
+                        <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 10, alignItems: 'center', width: 280 }}>
+                            <Text style={{ fontSize: 16, marginBottom: 16 }}>Bạn có chắc chắn muốn xóa tin nhắn này?</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+                                <TouchableOpacity style={{ flex: 1, alignItems: 'center', padding: 10 }} onPress={() => setDeleteConfirmMsgId(null)}>
+                                    <Text style={{ color: '#007bff', fontWeight: 'bold' }}>Hủy</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={{ flex: 1, alignItems: 'center', padding: 10 }} onPress={() => {
+                                    handleDeleteMessage(deleteConfirmMsgId, deleteConfirmRoom);
+                                    setDeleteConfirmMsgId(null);
+                                    setDeleteConfirmRoom(null);
+                                }}>
+                                    <Text style={{ color: 'red', fontWeight: 'bold' }}>Xóa</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
             )}
         </View>
     );

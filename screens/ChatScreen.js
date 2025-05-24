@@ -17,7 +17,7 @@ import FriendModal from './FriendModal';
 import GroupChatModal from './GroupChatModal';
 import { FontSizes } from '../utils/fontScaling';
 
-const socket = io("http://192.168.2.72:5000");
+const socket = io("http://localhost:5000");
 
 const emotions = [
     { id: 1, icon: "❤️" },
@@ -340,7 +340,7 @@ const ChatScreen = () => {
 
     // Lấy danh sách tài khoản (cho tìm kiếm và kết bạn)
     useEffect(() => {
-        fetch("http://192.168.2.72:5000/api/accounts")
+        fetch("http://localhost:5000/api/accounts")
             .then(res => res.json())
             .then(data => setAccounts(data))
             .catch(err => console.error("Error fetching accounts:", err));

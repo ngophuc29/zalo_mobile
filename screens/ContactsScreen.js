@@ -16,7 +16,9 @@ import { FontAwesome, MaterialIcons } from "@expo/vector-icons";
 import { io } from "socket.io-client";
 
 // Khởi tạo socket (đảm bảo dùng 1 instance chung)
-const socket = io("http://192.168.2.72:5000");
+// const socket = io("http://192.168.2.72:5000");
+const socket = io("http://localhost:5000");
+
 
 const menuItems = [
     { icon: "users", label: "Danh sách bạn bè" },

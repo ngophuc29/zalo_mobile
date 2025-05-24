@@ -28,7 +28,7 @@ const RegisterStep2Screen = () => {
     const [image, setImage] = useState(null);
     const [loading, setLoading] = useState(false);
 
-    const apiUrl = 'http://192.168.2.72:5000/api'; // đổi khi test
+    const apiUrl = 'http://localhost:5000/api'; // đổi khi test
 
     const isOldEnough = (birth) => {
         const age = dayjs().diff(dayjs(birth), 'year');

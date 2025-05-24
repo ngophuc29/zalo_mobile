@@ -25,7 +25,7 @@ const LoginScreen = ({ setIsLoggedIn }) => {
         }
 
         setLoading(true);
-        const apiUrl = 'http://192.168.2.72:5000/api';
+        const apiUrl = 'http://localhost:5000/api';
 
         try {
             const response = await axios.post(`${apiUrl}/accounts/login`, {
