@@ -49,7 +49,8 @@ const ChatContainer = ({
     allUsers,
     friends ,
     requestedFriends,
-    handleAddFriend
+    handleAddFriend,
+    onForwardMessage
 }) => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showImageUploader, setShowImageUploader] = useState(false);
@@ -80,14 +81,15 @@ const ChatContainer = ({
                 createdAt: new Date().toISOString(),
             };
 
-            // CHỈ thêm replyTo nếu đang thực sự reply
             if (replyingTo) {
                 msgObj.replyTo = replyingTo;
             }
 
-            sendMessage(msgObj);
+            if (msgObj.room === currentRoom) {
+                sendMessage(msgObj);
+            }
             setMessage('');
-            setReplyingTo(null); // Reset sau khi gửi
+            setReplyingTo(null);
         }
         setShowEmojiPicker(false);
     };
@@ -123,7 +125,9 @@ const ChatContainer = ({
             fileMessage.replyTo = replyingTo;
         }
 
-        sendMessage(fileMessage);
+        if (fileMessage.room === currentRoom) {
+            sendMessage(fileMessage);
+        }
         setShowImageUploader(false);
         setReplyingTo(null); // Reset reply sau khi gửi
     };
@@ -152,7 +156,9 @@ const ChatContainer = ({
             };
         }
 
-        sendMessage(fileMessage);
+        if (fileMessage.room === currentRoom) {
+            sendMessage(fileMessage);
+        }
         setShowFileUploader(false);
         setReplyingTo(null);
     };
@@ -254,6 +260,9 @@ const ChatContainer = ({
                         }}>
                             <Text style={styles.deleteButton}>X</Text>
                         </TouchableOpacity>
+                        <TouchableOpacity onPress={() => onForwardMessage && onForwardMessage(msg)}>
+                            <Text style={styles.actionIcon}>📤</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
 
@@ -311,6 +320,20 @@ const ChatContainer = ({
                         );
                     })()}
 
+                    {msg.forwardedFrom && (
+                        <View style={[styles.replyPreview, { backgroundColor: '#e6f7ff', borderLeftColor: '#00bfff' }]}> 
+                            <Text style={{ fontSize: 12, color: '#007bff', fontWeight: 'bold' }}>Chuyển tiếp từ {msg.forwardedFrom.name}</Text>
+                            {msg.forwardedFrom.message ? (
+                                <Text style={{ fontSize: 12, color: '#333', fontStyle: 'italic' }}>
+                                    {msg.forwardedFrom.message}
+                                </Text>
+                            ) : msg.forwardedFrom.fileUrl ? (
+                                <Text style={{ fontSize: 12, color: '#333', fontStyle: 'italic' }}>
+                                    [Tệp] {msg.forwardedFrom.fileName || 'Tệp đính kèm'}
+                                </Text>
+                            ) : null}
+                        </View>
+                    )}
 
                     {msg.message ? <Text style={styles.messageText}>{msg.message}</Text> : null}
 
@@ -388,6 +411,9 @@ const ChatContainer = ({
                                 ))}
                             </View>
                         )}
+                        <TouchableOpacity onPress={() => onForwardMessage && onForwardMessage(msg)}>
+                            <Text style={styles.actionIcon}>📤</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
             </View>
