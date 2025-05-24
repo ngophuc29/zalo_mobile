@@ -47,6 +47,9 @@ const ChatContainer = ({
     handleDisbandGroup,
     setGroupDetailsVisible,
     allUsers,
+    friends ,
+    requestedFriends,
+    handleAddFriend
 }) => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showImageUploader, setShowImageUploader] = useState(false);
@@ -196,6 +199,18 @@ const ChatContainer = ({
         }
         return date.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
     };
+
+    const isPrivateChat = (roomName) => roomName && roomName.includes('-');
+
+    const getPartnerName = () => {
+        if (!isPrivateChat(currentRoom)) return null;
+        const [u1, u2] = currentRoom.split('-');
+        return u1 === myname ? u2 : u1;
+    };
+
+    const partnerName = getPartnerName();
+    const isStranger = isPrivateChat(currentRoom) && partnerName && !friends.includes(partnerName);
+    const isRequested = isPrivateChat(currentRoom) && partnerName && requestedFriends && requestedFriends.includes(partnerName);
 
     const renderMessageItem = (msg) => {
         const isMine = msg.name === myname;
@@ -391,6 +406,20 @@ const ChatContainer = ({
                         <Text style={styles.groupDetailsButtonText}>Group Details</Text>
                     </TouchableOpacity>
                 )}
+                {isStranger && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, justifyContent: 'center' }}>
+                        <Text style={{ color: 'red', fontWeight: 'bold', marginRight: 8 }}>Người lạ</Text>
+                        {isRequested ? (
+                            <TouchableOpacity style={{ backgroundColor: '#ccc', padding: 8, borderRadius: 6 }} disabled>
+                                <Text style={{ color: '#888' }}>Đã gửi</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity style={{ backgroundColor: '#007bff', padding: 8, borderRadius: 6 }} onPress={() => handleAddFriend && handleAddFriend(partnerName)}>
+                                <Text style={{ color: '#fff' }}>Gửi lời mời kết bạn</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
             </View>
 
             <FlatList
@@ -532,6 +561,8 @@ const ChatContainer = ({
                     </View>
                 </Modal>
             )}
+
+            
         </View>
     );
 };

@@ -895,10 +895,9 @@ const ChatScreen = () => {
     const handleAddFriend = (friendUsername) => {
         if (!username) return;
         socket.emit("addFriend", { myUsername: username, friendUsername });
+        // Cập nhật ngay UI (optimistic update)
+        setRequestedFriends(prev => prev.includes(friendUsername) ? prev : [...prev, friendUsername]);
         setFriendInput("");
-        // cập nhật đúng user vừa gửi
-        setRequestedFriends(prev => [...prev, friendUsername]);
-        // (nếu bạn muốn modal vẫn mở để xem tab "Đã gửi", có thể bỏ setFriendModalVisible)
         setFriendModalVisible(false);
     };
 
@@ -1001,7 +1000,6 @@ const ChatScreen = () => {
                 sendMessage={sendMessageHandler}
                 message={message}
                 setMessage={setMessage}
-                // handleDeleteMessage={(msgId, room) => showToast("Delete", `Delete message ${msgId}`, "info")}
                 handleDeleteMessage={handleDeleteMessage}
                 handleChooseEmotion={handleChooseEmotion}
                 activeEmotionMsgId={activeEmotionMsgId}
@@ -1025,6 +1023,9 @@ const ChatScreen = () => {
                 handleDisbandGroup={handleDisbandGroup}
                 setGroupDetailsVisible={setGroupDetailsVisible}
                 allUsers={accounts.map(acc => acc.username)}
+                friends={friends}
+                requestedFriends={requestedFriends}
+                handleAddFriend={handleAddFriend}
             />
         );
     }
