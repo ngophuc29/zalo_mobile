@@ -110,6 +110,8 @@ const ChatScreen = () => {
     const [forwardMessageObj, setForwardMessageObj] = useState(null);
     const [selectedForwardRooms, setSelectedForwardRooms] = useState([]);
 
+    const [isSearching, setIsSearching] = useState(false);
+
     useEffect(() => { currentRoomRef.current = activeRoom; }, [activeRoom]);
 
     useEffect(() => {
@@ -205,17 +207,18 @@ const ChatScreen = () => {
     useEffect(() => {
         const onNewFriendRequest = (data) => {
             showToast("Lời mời kết bạn", `Bạn có lời mời kết bạn từ ${data.from}`, "info");
-            setFriendRequests(prev => [...prev, data.from]);
+            // Cập nhật lại danh sách lời mời kết bạn ngay lập tức
+            socket.emit("getFriendRequests", username);
         };
         socket.on("newFriendRequest", onNewFriendRequest);
         return () => {
             socket.off("newFriendRequest", onNewFriendRequest);
         };
-    }, []);
+    }, [username]);
 
     useEffect(() => {
         const onFriendRequests = (requests) => {
-            setFriendRequests(requests.map(req => req.from));
+            setFriendRequests(requests); // giữ nguyên object {from, to}
         };
         socket.on("friendRequests", onFriendRequests);
         return () => {
@@ -255,6 +258,10 @@ const ChatScreen = () => {
             }
         };
         const onRespondResult = (data) => {
+            // Nếu mình là người gửi và bị từ chối thì xóa khỏi requestedFriends
+            if (data.action === 'rejected' && data.from && data.to && data.from === username) {
+                setRequestedFriends(prev => prev.filter(u => u !== data.to));
+            }
             showToast("Friend Request", data.message, data.success ? "success" : "info");
             socket.emit("getFriendRequests", username);
             socket.emit("getFriends", username);
@@ -615,6 +622,7 @@ const ChatScreen = () => {
         setActiveRoom(room);
         socket.emit("join", room);
         setMessages([]);
+        socket.emit("getSentFriendRequests", username); // Đồng bộ lại requestedFriends khi vào room
         setActiveChats(prev => {
             const updated = { ...prev };
             if (updated[room]) {
@@ -632,6 +640,7 @@ const ChatScreen = () => {
         setActiveRoom(room);
         socket.emit("join", room);
         setMessages([]);
+        socket.emit("getSentFriendRequests", username); // Đồng bộ lại requestedFriends khi vào room
         setActiveChats(prev => ({
             ...prev,
             [room]: { partner: targetUser, unread: 0, messages: [] },
@@ -833,9 +842,6 @@ const ChatScreen = () => {
         }
     };
 
-    const chatList = Object.keys(activeChats).map(room => ({ room, ...activeChats[room] }));
-    const isSearching = searchFilter.trim().length > 0;
-
     useEffect(() => {
         if (!socket) return;
 
@@ -929,6 +935,9 @@ const ChatScreen = () => {
         setForwardMessageObj(null);
     };
 
+    // Tạo chatList có roomId
+    const chatList = Object.entries(activeChats).map(([room, chat]) => ({ ...chat, room }));
+
     if (activeRoom) {
         return (
             <>
@@ -964,8 +973,11 @@ const ChatScreen = () => {
                     allUsers={accounts.map(acc => acc.username)}
                     friends={friends}
                     requestedFriends={requestedFriends}
+                    friendRequests={friendRequests} // truyền đúng object {from, to}
                     handleAddFriend={handleAddFriend}
                     onForwardMessage={handleForwardMessage}
+                    socket={socket}
+
                 />
                 <Modal
                     visible={forwardModalVisible}

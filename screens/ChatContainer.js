@@ -49,8 +49,10 @@ const ChatContainer = ({
     allUsers,
     friends ,
     requestedFriends,
+    friendRequests, // <-- thêm prop này
     handleAddFriend,
-    onForwardMessage
+    onForwardMessage,
+    socket
 }) => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showImageUploader, setShowImageUploader] = useState(false);
@@ -208,21 +210,35 @@ const ChatContainer = ({
 
     const isPrivateChat = (roomName) => roomName && roomName.includes('-');
 
-    const getPartnerName = () => {
-        if (!isPrivateChat(currentRoom)) return null;
-        const [u1, u2] = currentRoom.split('-');
-        return u1 === myname ? u2 : u1;
-    };
-
-    const partnerName = getPartnerName();
-    const isStranger = isPrivateChat(currentRoom) && partnerName && !friends.includes(partnerName);
-    const isRequested = isPrivateChat(currentRoom) && partnerName && requestedFriends && requestedFriends.includes(partnerName);
+    // Tính toán partnerName, isStranger, isRequested cho UI trạng thái kết bạn
+    let partnerName = null;
+    if (currentRoom && !currentRoom.includes('group')) {
+        const parts = currentRoom.split('-');
+        partnerName = parts.find(name => name !== myname);
+    }
+    // Xác định trạng thái lời mời kết bạn
+    let friendRequestStatus = null;
+    let friendRequestObj = null;
+    if (partnerName && requestedFriends && requestedFriends.includes(partnerName)) {
+        friendRequestStatus = 'sent';
+    } else if (partnerName && friendRequests && friendRequests.some(r => r.from === partnerName && r.to === myname)) {
+        friendRequestStatus = 'received';
+        friendRequestObj = friendRequests.find(r => r.from === partnerName && r.to === myname);
+    }
+    const isStranger = partnerName && !friends.includes(partnerName);
+    const isRequested = partnerName && requestedFriends.includes(partnerName);
 
     const renderMessageItem = (msg) => {
         const isMine = msg.name === myname;
 
         return (
-            <View key={getMessageId(msg)} style={[styles.messageItem, { alignSelf: isMine ? 'flex-end' : 'flex-start' }]}>
+            <View
+                key={getMessageId(msg)}
+                style={[
+                    styles.messageItem,
+                    { alignSelf: isMine ? 'flex-end' : 'flex-start' }
+                ]}
+            >
                 {isMine && (
                     <View style={styles.actionContainer}>
                         <TouchableOpacity onPress={() => handleReply(msg)}>
@@ -232,15 +248,18 @@ const ChatContainer = ({
                         <TouchableOpacity
                             onPress={() =>
                                 setActiveEmotionMsgId(
-                                    getMessageId(msg) === activeEmotionMsgId ? null : getMessageId(msg)
+                                    getMessageId(msg) === activeEmotionMsgId
+                                        ? null
+                                        : getMessageId(msg)
                                 )
                             }
                         >
                             <Text style={styles.emotionIcon}>😊</Text>
                         </TouchableOpacity>
+
                         {activeEmotionMsgId === getMessageId(msg) && (
                             <View style={styles.emojiPicker}>
-                                {emotions.map(em => (
+                                {emotions.map((em) => (
                                     <TouchableOpacity
                                         key={em.id}
                                         onPress={() => {
@@ -254,130 +273,230 @@ const ChatContainer = ({
                                 ))}
                             </View>
                         )}
-                        <TouchableOpacity onPress={() => {
-                            setDeleteConfirmMsgId(getMessageId(msg));
-                            setDeleteConfirmRoom(msg.room);
-                        }}>
+
+                        <TouchableOpacity
+                            onPress={() => {
+                                setDeleteConfirmMsgId(getMessageId(msg));
+                                setDeleteConfirmRoom(msg.room);
+                            }}
+                        >
                             <Text style={styles.deleteButton}>X</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => onForwardMessage && onForwardMessage(msg)}>
+
+                        <TouchableOpacity
+                            onPress={() => onForwardMessage && onForwardMessage(msg)}
+                        >
                             <Text style={styles.actionIcon}>📤</Text>
                         </TouchableOpacity>
                     </View>
                 )}
 
-                <View style={[styles.bubble, { backgroundColor: isMine ? "#dcf8c6" : "#fff" }]}>
-                    {msg.name !== myname && <Text style={styles.senderName}>{msg.name}</Text>}
+                <View
+                    style={[
+                        styles.bubble,
+                        { backgroundColor: isMine ? '#dcf8c6' : '#fff' }
+                    ]}
+                >
+                    {!isMine && <Text style={styles.senderName}>{msg.name}</Text>}
 
-                    {msg.replyTo && msg.replyTo.id && msg.replyTo.name && (msg.replyTo.message || msg.replyTo.fileUrl) && (() => {
-                        const originalExists = messages.some(
-                            m => (m._id === msg.replyTo.id || m.id === msg.replyTo.id)
-                        );
+                    {msg.replyTo &&
+                        msg.replyTo.id &&
+                        msg.replyTo.name &&
+                        (msg.replyTo.message || msg.replyTo.fileUrl) && (
+                            (() => {
+                                const originalExists = messages.some(
+                                    (m) =>
+                                        m._id === msg.replyTo.id ||
+                                        m.id === msg.replyTo.id
+                                );
 
-                        return (
-                            <View style={styles.replyPreview}>
-                                <Text style={styles.replyToText}>Replying to {msg.replyTo.name}</Text>
-
-                                {msg.replyTo.message ? (
-                                    // --- Text reply ---
-                                    <Text style={[
-                                        styles.replyMessageText,
-                                        !originalExists && styles.deletedReply
-                                    ]}>
-                                        {originalExists
-                                            ? msg.replyTo.message
-                                            : "Tin nhắn đã bị xóa"}
-                                    </Text>
-
-                                ) : msg.replyTo.fileUrl ? (
-                                    // --- File reply ---
-                                    !originalExists ? (
-                                        // File gốc đã bị xóa
-                                        <Text style={[styles.replyFileText, styles.deletedReply]}>
-                                            Tin nhắn đã bị xóa
+                                return (
+                                    <View style={styles.replyPreview}>
+                                        <Text style={styles.replyToText}>
+                                            Replying to {msg.replyTo.name}
                                         </Text>
-                                    ) : (
-                                        // File gốc còn, render preview
-                                        <View style={styles.replyFilePreview}>
-                                            {/\.(jpe?g|png|gif|webp)$/i.test(msg.replyTo.fileUrl) ? (
-                                                <Image
-                                                    source={{ uri: msg.replyTo.fileUrl }}
-                                                    style={styles.replyFileImage}
-                                                />
-                                            ) : /\.(mp4|webm|ogg)$/i.test(msg.replyTo.fileUrl) ? (
-                                                <View style={styles.replyVideoContainer}>
-                                                    <Text style={styles.replyFileText}>[Video]</Text>
-                                                </View>
-                                            ) : (
-                                                <Text style={styles.replyFileText}>
-                                                    [File] {msg.replyTo.fileName || 'Tệp đính kèm'}
+
+                                        {msg.replyTo.message ? (
+                                            <Text
+                                                style={[
+                                                    styles.replyMessageText,
+                                                    !originalExists &&
+                                                    styles.deletedReply
+                                                ]}
+                                            >
+                                                {originalExists
+                                                    ? msg.replyTo.message
+                                                    : 'Tin nhắn đã bị xóa'}
+                                            </Text>
+                                        ) : msg.replyTo.fileUrl ? (
+                                            !originalExists ? (
+                                                <Text
+                                                    style={[
+                                                        styles.replyFileText,
+                                                        styles.deletedReply
+                                                    ]}
+                                                >
+                                                    Tin nhắn đã bị xóa
                                                 </Text>
-                                            )}
-                                        </View>
-                                    )
-                                ) : null}
-                            </View>
-                        );
-                    })()}
+                                            ) : (
+                                                <View
+                                                    style={
+                                                        styles.replyFilePreview
+                                                    }
+                                                >
+                                                    {/\.(jpe?g|png|gif|webp)$/i.test(
+                                                        msg.replyTo.fileUrl
+                                                    ) ? (
+                                                        <Image
+                                                            source={{
+                                                                uri: msg.replyTo
+                                                                    .fileUrl
+                                                            }}
+                                                            style={
+                                                                styles.replyFileImage
+                                                            }
+                                                        />
+                                                    ) : /\.(mp4|webm|ogg)$/i.test(
+                                                        msg.replyTo.fileUrl
+                                                    ) ? (
+                                                        <View
+                                                            style={
+                                                                styles.replyVideoContainer
+                                                            }
+                                                        >
+                                                            <Text
+                                                                style={
+                                                                    styles.replyFileText
+                                                                }
+                                                            >
+                                                                [Video]
+                                                            </Text>
+                                                        </View>
+                                                    ) : (
+                                                        <Text
+                                                            style={
+                                                                styles.replyFileText
+                                                            }
+                                                        >
+                                                            [File]{' '}
+                                                            {msg.replyTo
+                                                                .fileName ||
+                                                                'Tệp đính kèm'}
+                                                        </Text>
+                                                    )}
+                                                </View>
+                                            )
+                                        ) : null}
+                                    </View>
+                                );
+                            })()
+                        )}
 
                     {msg.forwardedFrom && (
-                        <View style={[styles.replyPreview, { backgroundColor: '#e6f7ff', borderLeftColor: '#00bfff' }]}> 
-                            <Text style={{ fontSize: 12, color: '#007bff', fontWeight: 'bold' }}>Chuyển tiếp từ {msg.forwardedFrom.name}</Text>
+                        <View
+                            style={[
+                                styles.replyPreview,
+                                {
+                                    backgroundColor: '#e6f7ff',
+                                    borderLeftColor: '#00bfff'
+                                }
+                            ]}
+                        >
+                            <Text
+                                style={{
+                                    fontSize: 12,
+                                    color: '#007bff',
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                Chuyển tiếp từ {msg.forwardedFrom.name}
+                            </Text>
                             {msg.forwardedFrom.message ? (
-                                <Text style={{ fontSize: 12, color: '#333', fontStyle: 'italic' }}>
+                                <Text
+                                    style={{
+                                        fontSize: 12,
+                                        color: '#333',
+                                        fontStyle: 'italic'
+                                    }}
+                                >
                                     {msg.forwardedFrom.message}
                                 </Text>
                             ) : msg.forwardedFrom.fileUrl ? (
-                                <Text style={{ fontSize: 12, color: '#333', fontStyle: 'italic' }}>
-                                    [Tệp] {msg.forwardedFrom.fileName || 'Tệp đính kèm'}
+                                <Text
+                                    style={{
+                                        fontSize: 12,
+                                        color: '#333',
+                                        fontStyle: 'italic'
+                                    }}
+                                >
+                                    [Tệp]{' '}
+                                    {msg.forwardedFrom.fileName || 'Tệp đính kèm'}
                                 </Text>
                             ) : null}
                         </View>
                     )}
 
-                    {msg.message ? <Text style={styles.messageText}>{msg.message}</Text> : null}
+                    {msg.message && (
+                        <Text style={styles.messageText}>{msg.message}</Text>
+                    )}
 
                     {msg.fileUrl && (
                         <View style={{ marginTop: 5 }}>
                             {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
                                 <Image
                                     source={{ uri: msg.fileUrl }}
-                                    style={{ width: 200, height: 200, borderRadius: 8 }}
+                                    style={{
+                                        width: 200,
+                                        height: 200,
+                                        borderRadius: 8
+                                    }}
                                     resizeMode="cover"
                                 />
                             ) : /\.(mp4|webm|ogg)$/i.test(msg.fileUrl) ? (
                                 <Video
                                     source={{ uri: msg.fileUrl }}
-                                    style={{ width: 200, height: 200, borderRadius: 8 }}
+                                    style={{
+                                        width: 200,
+                                        height: 200,
+                                        borderRadius: 8
+                                    }}
                                     useNativeControls
                                     resizeMode="contain"
                                     shouldPlay={false}
                                     isLooping={false}
                                 />
                             ) : (
-                                        <TouchableOpacity
-                                            onPress={() => Linking.openURL(msg.fileUrl)}
-                                            style={styles.fileContainer}
-                                        >
-                                            <Text style={styles.fileIcon}>📄</Text>
-                                            <View style={styles.fileInfo}>
-                                                <Text style={styles.fileName}>
-                                                    {msg.fileName || msg.name || 'Tệp đính kèm'}
-                                                </Text>
-                                                <Text style={styles.fileSize}>
-                                                    {msg.fileSize ? `(${(msg.fileSize / 1024).toFixed(2)} KB)` : ''}
-                                                </Text>
-                                            </View>
-                                        </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => Linking.openURL(msg.fileUrl)}
+                                    style={styles.fileContainer}
+                                >
+                                    <Text style={styles.fileIcon}>📄</Text>
+                                    <View style={styles.fileInfo}>
+                                        <Text style={styles.fileName}>
+                                            {msg.fileName || 'Tệp đính kèm'}
+                                        </Text>
+                                        <Text style={styles.fileSize}>
+                                            {msg.fileSize
+                                                ? `(${(
+                                                    msg.fileSize / 1024
+                                                ).toFixed(2)} KB)`
+                                                : ''}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
                             )}
                         </View>
                     )}
 
                     {msg.reaction && (
-                        <Text style={styles.reaction}>{emotions[msg.reaction - 1].icon}</Text>
+                        <Text style={styles.reaction}>
+                            {emotions[msg.reaction - 1].icon}
+                        </Text>
                     )}
 
-                    <Text style={styles.timeText}>{formatTime(msg.createdAt)}</Text>
+                    <Text style={styles.timeText}>
+                        {formatTime(msg.createdAt)}
+                    </Text>
                 </View>
 
                 {!isMine && (
@@ -389,15 +508,18 @@ const ChatContainer = ({
                         <TouchableOpacity
                             onPress={() =>
                                 setActiveEmotionMsgId(
-                                    getMessageId(msg) === activeEmotionMsgId ? null : getMessageId(msg)
+                                    getMessageId(msg) === activeEmotionMsgId
+                                        ? null
+                                        : getMessageId(msg)
                                 )
                             }
                         >
                             <Text style={styles.emotionIcon}>😊</Text>
                         </TouchableOpacity>
+
                         {activeEmotionMsgId === getMessageId(msg) && (
                             <View style={styles.emojiPickerRight}>
-                                {emotions.map(em => (
+                                {emotions.map((em) => (
                                     <TouchableOpacity
                                         key={em.id}
                                         onPress={() => {
@@ -411,7 +533,10 @@ const ChatContainer = ({
                                 ))}
                             </View>
                         )}
-                        <TouchableOpacity onPress={() => onForwardMessage && onForwardMessage(msg)}>
+
+                        <TouchableOpacity
+                            onPress={() => onForwardMessage && onForwardMessage(msg)}
+                        >
                             <Text style={styles.actionIcon}>📤</Text>
                         </TouchableOpacity>
                     </View>
@@ -419,6 +544,7 @@ const ChatContainer = ({
             </View>
         );
     };
+    
 
     return (
         <View style={styles.container}>
@@ -435,12 +561,56 @@ const ChatContainer = ({
                 {isStranger && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, justifyContent: 'center' }}>
                         <Text style={{ color: 'red', fontWeight: 'bold', marginRight: 8 }}>Người lạ</Text>
-                        {isRequested ? (
+                        {friendRequestStatus === 'sent' ? (
                             <TouchableOpacity style={{ backgroundColor: '#ccc', padding: 8, borderRadius: 6 }} disabled>
                                 <Text style={{ color: '#888' }}>Đã gửi</Text>
                             </TouchableOpacity>
+                        ) : friendRequestStatus === 'received' ? (
+                            <>
+                                <TouchableOpacity
+                                    style={{ backgroundColor: '#28a745', padding: 8, borderRadius: 6, marginRight: 8 }}
+                                    onPress={() => {
+                                        if (friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to))) {
+                                            const payload = friendRequestObj._id || friendRequestObj.id
+                                                ? { requestId: friendRequestObj._id || friendRequestObj.id, action: 'accepted' }
+                                                : { from: friendRequestObj.from, to: friendRequestObj.to, action: 'accepted' };
+                                            socket.emit('respondFriendRequest', payload);
+                                            // Đồng bộ lại friends và requests
+                                            socket.emit('getFriends', myname);
+                                            socket.emit('getFriendRequests', myname);
+                                        } else {
+                                            console.log('Không đủ thông tin friendRequestObj:', friendRequestObj);
+                                        }
+                                    }}
+                                    disabled={!(friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to)))}
+                                >
+                                    <Text style={{ color: '#fff' }}>Chấp nhận</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={{ backgroundColor: '#dc3545', padding: 8, borderRadius: 6 }}
+                                    onPress={() => {
+                                        if (friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to))) {
+                                            const payload = friendRequestObj._id || friendRequestObj.id
+                                                ? { requestId: friendRequestObj._id || friendRequestObj.id, action: 'rejected' }
+                                                : { from: friendRequestObj.from, to: friendRequestObj.to, action: 'rejected' };
+                                            socket.emit('respondFriendRequest', payload);
+                                            // Đồng bộ lại friends và requests
+                                            socket.emit('getFriends', myname);
+                                            socket.emit('getFriendRequests', myname);
+                                        } else {
+                                            console.log('Không đủ thông tin friendRequestObj:', friendRequestObj);
+                                        }
+                                    }}
+                                    disabled={!(friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to)))}
+                                >
+                                    <Text style={{ color: '#fff' }}>Từ chối</Text>
+                                </TouchableOpacity>
+                            </>
                         ) : (
-                            <TouchableOpacity style={{ backgroundColor: '#007bff', padding: 8, borderRadius: 6 }} onPress={() => handleAddFriend && handleAddFriend(partnerName)}>
+                            <TouchableOpacity style={{ backgroundColor: '#007bff', padding: 8, borderRadius: 6 }} onPress={() => {
+                                handleAddFriend && handleAddFriend(partnerName);
+                                if (typeof setRequestedFriends === 'function') setRequestedFriends(prev => prev.includes(partnerName) ? prev : [...prev, partnerName]);
+                            }}>
                                 <Text style={{ color: '#fff' }}>Gửi lời mời kết bạn</Text>
                             </TouchableOpacity>
                         )}
@@ -588,7 +758,11 @@ const ChatContainer = ({
                 </Modal>
             )}
 
-            
+            {/* Debug: log trạng thái lời mời kết bạn */}
+            {useEffect(() => {
+                console.log('friendRequests:', friendRequests);
+                console.log('requestedFriends:', requestedFriends);
+            }, [friendRequests, requestedFriends])}
         </View>
     );
 };
