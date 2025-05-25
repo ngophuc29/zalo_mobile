@@ -157,6 +157,31 @@ const ChatScreen = () => {
     }, []);
 
     useEffect(() => {
+        if (!socket || !username) return;
+        // Khi danh sách bạn bè thay đổi, đồng bộ lại requestedFriends
+        const onFriendsList = (friendsList) => {
+            setFriends(friendsList);
+            socket.emit('getSentFriendRequests', username);
+        };
+        socket.on('friendsList', onFriendsList);
+        return () => {
+            socket.off('friendsList', onFriendsList);
+        };
+    }, [socket, username]);
+
+    useEffect(() => {
+        if (!socket || !username) return;
+        // Khi bị hủy kết bạn, đồng bộ lại requestedFriends
+        const onFriendRemoved = (data) => {
+            socket.emit('getSentFriendRequests', username);
+        };
+        socket.on('friendRemoved', onFriendRemoved);
+        return () => {
+            socket.off('friendRemoved', onFriendRemoved);
+        };
+    }, [socket, username]);
+
+    useEffect(() => {
         const onFriendsList = (friendsList) => {
             setFriends(friendsList);
         };
@@ -622,7 +647,10 @@ const ChatScreen = () => {
         setActiveRoom(room);
         socket.emit("join", room);
         setMessages([]);
-        socket.emit("getSentFriendRequests", username); // Đồng bộ lại requestedFriends khi vào room
+        // Đồng bộ lại trạng thái bạn bè và lời mời khi vào room
+        socket.emit("getFriends", username);
+        socket.emit("getFriendRequests", username);
+        socket.emit("getSentFriendRequests", username);
         setActiveChats(prev => {
             const updated = { ...prev };
             if (updated[room]) {

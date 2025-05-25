@@ -219,11 +219,14 @@ const ChatContainer = ({
     // Xác định trạng thái lời mời kết bạn
     let friendRequestStatus = null;
     let friendRequestObj = null;
-    if (partnerName && requestedFriends && requestedFriends.includes(partnerName)) {
-        friendRequestStatus = 'sent';
-    } else if (partnerName && friendRequests && friendRequests.some(r => r.from === partnerName && r.to === myname)) {
-        friendRequestStatus = 'received';
-        friendRequestObj = friendRequests.find(r => r.from === partnerName && r.to === myname);
+    // Nếu chưa là bạn bè
+    if (partnerName && !friends.includes(partnerName)) {
+        if (requestedFriends && requestedFriends.includes(partnerName)) {
+            friendRequestStatus = 'sent';
+        } else if (friendRequests && friendRequests.some(r => r.from === partnerName && r.to === myname)) {
+            friendRequestStatus = 'received';
+            friendRequestObj = friendRequests.find(r => r.from === partnerName && r.to === myname);
+        }
     }
     const isStranger = partnerName && !friends.includes(partnerName);
     const isRequested = partnerName && requestedFriends.includes(partnerName);
