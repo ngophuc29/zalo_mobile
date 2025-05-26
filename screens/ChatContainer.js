@@ -577,7 +577,7 @@ const ChatContainer = ({
                         <Text style={styles.groupDetailsButtonText}>Group Details</Text>
                     </TouchableOpacity>
                 )}
-                {isStranger && (
+                {isPrivateChat(currentRoom) && isStranger && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, justifyContent: 'center' }}>
                         <Text style={{ color: 'red', fontWeight: 'bold', marginRight: 8 }}>Người lạ</Text>
                         {friendRequestStatus === 'sent' ? (

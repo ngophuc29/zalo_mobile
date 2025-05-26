@@ -989,8 +989,14 @@ const ChatScreen = () => {
         setForwardMessageObj(null);
     };
 
-    // Tạo chatList có roomId
-    const chatList = Object.entries(activeChats).map(([room, chat]) => ({ ...chat, room }));
+    // Tạo chatList có roomId, sắp xếp mới nhất lên đầu
+    const chatList = Object.entries(activeChats)
+        .map(([room, chat]) => ({ ...chat, room }))
+        .sort((a, b) => {
+            const timeA = a.lastMessage?.time ? new Date(a.lastMessage.time).getTime() : 0;
+            const timeB = b.lastMessage?.time ? new Date(b.lastMessage.time).getTime() : 0;
+            return timeB - timeA;
+        });
 
     // Đảm bảo realtime friends khi chuyển tab bằng useFocusEffect, chỉ giữ 1 nơi đăng ký các listener
     useFocusEffect(
@@ -1056,6 +1062,14 @@ const ChatScreen = () => {
             };
         }, [socket, username])
     );
+
+    useEffect(() => {
+        if (searchFilter.trim().length > 0) {
+            setIsSearching(true);
+        } else {
+            setIsSearching(false);
+        }
+    }, [searchFilter]);
 
     if (activeRoom) {
         return (
