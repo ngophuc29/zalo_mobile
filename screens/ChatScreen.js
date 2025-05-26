@@ -989,12 +989,15 @@ const ChatScreen = () => {
         setForwardMessageObj(null);
     };
 
-    // Tạo chatList có roomId, sắp xếp mới nhất lên đầu
+    // Tạo chatList có roomId, sắp xếp mới nhất lên đầu, nhóm mới tạo (chưa có lastMessage) luôn lên đầu
     const chatList = Object.entries(activeChats)
         .map(([room, chat]) => ({ ...chat, room }))
         .sort((a, b) => {
-            const timeA = a.lastMessage?.time ? new Date(a.lastMessage.time).getTime() : 0;
-            const timeB = b.lastMessage?.time ? new Date(b.lastMessage.time).getTime() : 0;
+            if (!a.lastMessage && b.lastMessage) return -1;
+            if (a.lastMessage && !b.lastMessage) return 1;
+            if (!a.lastMessage && !b.lastMessage) return 0;
+            const timeA = new Date(a.lastMessage.time).getTime();
+            const timeB = new Date(b.lastMessage.time).getTime();
             return timeB - timeA;
         });
 
