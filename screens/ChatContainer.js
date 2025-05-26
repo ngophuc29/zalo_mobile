@@ -184,7 +184,8 @@ const ChatContainer = ({
     const getDisplayName = (roomName) => {
         if (!roomName) return '';
         if (roomName.includes('-')) {
-            return roomName.split('-')[1];
+            const names = roomName.split('-');
+            return names.find(n => n !== myname) || names[0];
         } else {
             return roomName.split('_')[0];
         }
