@@ -20,6 +20,7 @@ import GroupChatModal from './GroupChatModal';
 import { FontSizes } from '../utils/fontScaling';
 import { CheckBox } from 'react-native';
 import { MdGroupAdd } from "react-icons/md";
+import { useFocusEffect } from '@react-navigation/native';
 
 const socket = io("http://localhost:5000");
 
@@ -222,27 +223,37 @@ const ChatScreen = () => {
     }, []);
 
     useEffect(() => {
+        if (!socket || !username) return;
         const onFriendAccepted = ({ friend, roomId }) => {
             setActiveChats(prev => {
                 const updated = { ...prev };
                 if (!updated[roomId]) {
                     updated[roomId] = { partner: friend, unread: 0, isGroup: false };
                 }
-                AsyncStorage.setItem('activeChats', JSON.stringify(updated))
-                    .catch(err => console.error("Error saving activeChats:", err));
+                AsyncStorage.setItem('activeChats', JSON.stringify(updated)).catch(err => console.error("Error saving activeChats:", err));
                 return updated;
             });
-            // Xóa partnerName khỏi requestedFriends nếu có
+            // Luôn đồng bộ lại friends, requestedFriends, friendRequests cho cả 2 phía
+            socket.emit("getFriends", username);
+            socket.emit("getFriendRequests", username);
+            socket.emit("getSentFriendRequests", username);
+            // Đồng bộ lại toàn bộ chat list như web
+            socket.emit("getUserConversations", username);
+            // Nếu mình là người gửi hoặc nhận, join room và chuyển phòng
+            if (roomId && (roomId.includes(username) || friend === username)) {
+                socket.emit("join", roomId);
+                joinedRoomsRef.current.add(roomId);
+                setActiveRoom(roomId);
+                AsyncStorage.setItem('activeRoom', roomId).catch(() => {});
+            }
             setRequestedFriends(prev => prev.filter(u => u !== friend));
-            socket.emit("join", roomId);
-            joinedRoomsRef.current.add(roomId);
-            showToast("Kết bạn", `Bạn đã kết bạn với ${friend}`, "success");
+            showToast("Kết bạn", `Bạn đã kết bạn với ${friend} `, "success");
         };
         socket.on("friendAccepted", onFriendAccepted);
         return () => {
             socket.off("friendAccepted", onFriendAccepted);
         };
-    }, []);
+    }, [socket, username]);
 
     useEffect(() => {
         const onNewFriendRequest = (data) => {
@@ -981,6 +992,71 @@ const ChatScreen = () => {
     // Tạo chatList có roomId
     const chatList = Object.entries(activeChats).map(([room, chat]) => ({ ...chat, room }));
 
+    // Đảm bảo realtime friends khi chuyển tab bằng useFocusEffect, chỉ giữ 1 nơi đăng ký các listener
+    useFocusEffect(
+        React.useCallback(() => {
+            if (!socket || !username) return;
+            // Đăng ký các listener khi vào tab chat (KHÔNG đăng ký lại friendAccepted ở đây)
+            const onFriendsList = (friendsList) => setFriends(friendsList);
+            const onFriendRequests = (requests) => setFriendRequests(requests);
+            const onSentFriendRequests = (requests) => setRequestedFriends(requests.map(req => req.to));
+            const onRespondResult = (data) => {
+                if (data.action === 'rejected' && data.from && data.to && data.from === username) {
+                    setRequestedFriends(prev => prev.filter(u => u !== data.to));
+                }
+                showToast("Friend Request", data.message, data.success ? "success" : "info");
+                socket.emit("getFriendRequests", username);
+                socket.emit("getFriends", username);
+            };
+            // Thêm listener cho friendAccepted để realtime khi chuyển tab
+            const onFriendAccepted = ({ friend, roomId }) => {
+                setActiveChats(prev => {
+                    const updated = { ...prev };
+                    if (!updated[roomId]) {
+                        updated[roomId] = { partner: friend, unread: 0, isGroup: false };
+                    }
+                    AsyncStorage.setItem('activeChats', JSON.stringify(updated)).catch(err => console.error("Error saving activeChats:", err));
+                    return updated;
+                });
+                socket.emit("getFriends", username);
+                socket.emit("getFriendRequests", username);
+                socket.emit("getSentFriendRequests", username);
+                socket.emit("getUserConversations", username);
+                if (roomId && (roomId.includes(username) || friend === username)) {
+                    socket.emit("join", roomId);
+                    joinedRoomsRef.current.add(roomId);
+                    setActiveRoom(roomId);
+                    AsyncStorage.setItem('activeRoom', roomId).catch(() => {});
+                }
+                setRequestedFriends(prev => prev.filter(u => u !== friend));
+                showToast("Kết bạn", `Bạn đã kết bạn với ${friend} `, "success");
+            };
+            socket.on("friendsList", onFriendsList);
+            socket.on("friendRequests", onFriendRequests);
+            socket.on("sentFriendRequests", onSentFriendRequests);
+            socket.on("respondFriendRequestResult", onRespondResult);
+            socket.on("friendAccepted", onFriendAccepted);
+            // Emit lại để lấy dữ liệu mới khi mount
+            socket.emit("getFriends", username);
+            socket.emit("getFriendRequests", username);
+            socket.emit("getSentFriendRequests", username);
+            AsyncStorage.getItem('activeChats')
+                .then(data => {
+                    if (data) {
+                        setActiveChats(JSON.parse(data));
+                    }
+                })
+                .catch(err => console.error("Error loading activeChats (focus):", err));
+            return () => {
+                socket.off("friendsList", onFriendsList);
+                socket.off("friendRequests", onFriendRequests);
+                socket.off("sentFriendRequests", onSentFriendRequests);
+                socket.off("respondFriendRequestResult", onRespondResult);
+                socket.off("friendAccepted", onFriendAccepted);
+            };
+        }, [socket, username])
+    );
+
     if (activeRoom) {
         return (
             <>
@@ -1019,6 +1095,7 @@ const ChatScreen = () => {
                     friendRequests={friendRequests} // truyền đúng object {from, to}
                     handleAddFriend={handleAddFriend}
                     onForwardMessage={handleForwardMessage}
+                    setRequestedFriends={setRequestedFriends}
                     socket={socket}
                     forceUpdate={forceUpdate} // Truyền prop forceUpdate để re-render
                 />

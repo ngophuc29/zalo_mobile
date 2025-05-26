@@ -6,7 +6,6 @@ import {
     TouchableOpacity,
     StyleSheet,
     TextInput,
-    ScrollView,
     Modal,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -15,10 +14,7 @@ import Toast from "react-native-toast-message";
 import { FontAwesome, MaterialIcons } from "@expo/vector-icons";
 import { io } from "socket.io-client";
 
-// Khởi tạo socket (đảm bảo dùng 1 instance chung)
-// const socket = io("http://192.168.2.72:5000");
 const socket = io("http://localhost:5000");
-
 
 const menuItems = [
     { icon: "users", label: "Danh sách bạn bè" },
@@ -28,7 +24,7 @@ const menuItems = [
 const ContactsScreen = () => {
     const [friendRequests, setFriendRequests] = useState([]);
     const [friends, setFriends] = useState([]);
-    const [myUsername, setMyUsername] = useState("Guest");
+    const [myUsername, setMyUsername] = useState("");
     const [confirmVisible, setConfirmVisible] = useState(false);
     const [friendToRemove, setFriendToRemove] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
@@ -36,7 +32,6 @@ const ContactsScreen = () => {
     const [groupedFriends, setGroupedFriends] = useState({});
     const [sortedLetters, setSortedLetters] = useState([]);
 
-    // Lấy username từ AsyncStorage
     useEffect(() => {
         (async () => {
             try {
@@ -49,7 +44,125 @@ const ContactsScreen = () => {
         })();
     }, []);
 
-    // Hàm nhóm và filter lại bạn bè
+    useEffect(() => {
+        if (!socket || !myUsername) return;
+
+        socket.emit("registerUser", myUsername);
+
+        socket.emit("registerUser", myUsername);
+
+        // 1) Khi server gửi danh sách bạn mới hoặc lần đầu getFriends
+
+        const onFriendsList = (data) => {
+            setFriends(data);
+            groupFriendsByLetter(data);
+        };
+
+        // 2) Khi server emit sau accept/cancel bạn
+
+        const onFriendsListUpdated = (data) => {
+            setFriends(data);
+            groupFriendsByLetter(data);
+        };
+
+        // 3) Lời mời
+
+        const onFriendRequests = (data) => {
+            setFriendRequests(data);
+        };
+
+        // 4) Có lời mời mới
+
+        const onNewFriendRequest = (data) => {
+            Toast.show({ type: "info", text1: `Bạn có lời mời từ ${data.from}` });
+            setFriendRequests(data.requests || []);
+        };
+
+        // 5) Khi lời mời liên quan đến mình thay đổi
+
+        const onFriendRequestUpdated = (data) => {
+            if (data.to === myUsername) {
+                socket.emit("getFriendRequests", myUsername);
+            }
+        };
+
+        // 6) Accept thành công (chỉ toast và reload requests)
+
+        const onFriendAccepted = ({ friend }) => {
+            Toast.show({ type: "success", text1: `Bạn đã kết bạn với ${friend}` });
+            socket.emit("getFriendRequests", myUsername);
+        };
+
+        // 7) Phản hồi accept/reject
+
+        const onRespondResult = (data) => {
+            Toast.show({ type: "info", text1: data.message });
+            socket.emit("getFriendRequests", myUsername);
+        };
+
+        // 8) Phản hồi hủy bạn
+
+        const onCancelResult = (data) => {
+            Toast.show({ type: "info", text1: data.message });
+        };
+
+        // 9) Phản hồi thu hồi lời mời
+
+        const onWithdrawn = (data) => {
+            Toast.show({ type: "info", text1: `${data.from} đã thu hồi lời mời.` });
+            socket.emit("getFriendRequests", myUsername);
+        };
+
+        // Đăng ký tất cả
+
+        socket.on("friendsList", onFriendsList);
+        socket.on("friendsListUpdated", onFriendsListUpdated);
+        socket.on("friendRequests", onFriendRequests);
+        socket.on("newFriendRequest", onNewFriendRequest);
+        socket.on("friendRequestUpdated", onFriendRequestUpdated);
+        socket.on("friendAccepted", onFriendAccepted);
+        socket.on("respondFriendRequestResult", onRespondResult);
+        socket.on("cancelFriendResult", onCancelResult);
+        socket.on("friendRequestWithdrawn", onWithdrawn);
+
+        // Emit lấy ban đầu
+
+        socket.emit("getFriends", myUsername);
+        socket.emit("getFriendRequests", myUsername);
+
+        // Cleanup
+
+        return () => {
+            socket.off("friendsList", onFriendsList);
+            socket.off("friendsListUpdated", onFriendsListUpdated);
+            socket.off("friendRequests", onFriendRequests);
+            socket.off("newFriendRequest", onNewFriendRequest);
+            socket.off("friendRequestUpdated", onFriendRequestUpdated);
+            socket.off("friendAccepted", onFriendAccepted);
+            socket.off("respondFriendRequestResult", onRespondResult);
+            socket.off("cancelFriendResult", onCancelResult);
+            socket.off("friendRequestWithdrawn", onWithdrawn);
+        };
+    }, [myUsername, searchTerm]);
+
+    useEffect(() => {
+        if (socket && myUsername) {
+            socket.emit("getFriends", myUsername);
+            socket.emit("getFriendRequests", myUsername);
+        }
+    }, [myUsername]);
+
+    // Khi focus lại screen
+
+    useFocusEffect(
+        React.useCallback(() => {
+            if (socket && myUsername) {
+                socket.emit("getFriends", myUsername);
+                socket.emit("getFriendRequests", myUsername);
+            }
+        }, [myUsername])
+    );
+
     const groupFriendsByLetter = (list) => {
         const filtered = list.filter((f) =>
             f.toLowerCase().includes(searchTerm.toLowerCase())
@@ -64,114 +177,18 @@ const ContactsScreen = () => {
         setSortedLetters(Object.keys(grouped).sort());
     };
 
-    // Đăng ký socket events
-    useEffect(() => {
-        if (!socket || !myUsername) return;
-        // 0) Đăng ký user với server để nhận các emit riêng
-        socket.emit("registerUser", myUsername);
-        // 1) Khi server gửi danh sách bạn mới hoặc lần đầu getFriends
-        const onFriendsList = (data) => {
-            setFriends(data);
-            groupFriendsByLetter(data);
-        };
-
-        // 2) Khi server emit sau accept/cancel bạn
-        const onFriendsListUpdated = (data) => {
-            setFriends(data);
-            groupFriendsByLetter(data);
-        };
-
-        // 3) Lời mời
-        const onFriendRequests = (data) => {
-            setFriendRequests(data);
-        };
-
-        // 4) Có lời mời mới
-        const onNewFriendRequest = (data) => {
-            Toast.show({ type: "info", text1: `Bạn có lời mời từ ${data.from}` });
-            setFriendRequests(data.requests || []);
-        };
-
-        // 5) Khi lời mời liên quan đến mình thay đổi
-        const onFriendRequestUpdated = (data) => {
-            if (data.to === myUsername) {
-                socket.emit("getFriendRequests", myUsername);
-            }
-        };
-
-        // 6) Accept thành công (chỉ toast và reload requests)
-        const onFriendAccepted = ({ friend }) => {
-            Toast.show({ type: "success", text1: `Bạn đã kết bạn với ${friend}` });
-            socket.emit("getFriendRequests", myUsername);
-            // danh sách bạn sẽ được cập nhật qua friendsListUpdated
-        };
-
-        // 7) Phản hồi accept/reject
-        const onRespondResult = (data) => {
-            Toast.show({ type: "info", text1: data.message });
-            socket.emit("getFriendRequests", myUsername);
-        };
-
-        // 8) Phản hồi hủy bạn
-        const onCancelResult = (data) => {
-            Toast.show({ type: "info", text1: data.message });
-            // danh sách bạn sẽ được cập nhật qua friendsListUpdated
-        };
-
-        // 9) Phản hồi thu hồi lời mời
-        const onWithdrawn = (data) => {
-            Toast.show({ type: "info", text1: `${data.from} đã thu hồi lời mời.` });
-            socket.emit("getFriendRequests", myUsername);
-        };
-
-        // Đăng ký tất cả
-        socket.on("friendsList", onFriendsList);
-        socket.on("friendsListUpdated", onFriendsListUpdated);
-        socket.on("friendRequests", onFriendRequests);
-        socket.on("newFriendRequest", onNewFriendRequest);
-        socket.on("friendRequestUpdated", onFriendRequestUpdated);
-        socket.on("friendAccepted", onFriendAccepted);
-        socket.on("respondFriendRequestResult", onRespondResult);
-        socket.on("cancelFriendResult", onCancelResult);
-        socket.on("friendRequestWithdrawn", onWithdrawn);
-
-        // Emit lấy ban đầu
-        socket.emit("getFriends", myUsername);
-        socket.emit("getFriendRequests", myUsername);
-
-        // Cleanup
-        return () => {
-            socket.off("friendsList", onFriendsList);
-            socket.off("friendsListUpdated", onFriendsListUpdated);
-            socket.off("friendRequests", onFriendRequests);
-            socket.off("newFriendRequest", onNewFriendRequest);
-            socket.off("friendRequestUpdated", onFriendRequestUpdated);
-            socket.off("friendAccepted", onFriendAccepted);
-            socket.off("respondFriendRequestResult", onRespondResult);
-            socket.off("cancelFriendResult", onCancelResult);
-            socket.off("friendRequestWithdrawn", onWithdrawn);
-        };
-    }, [myUsername, searchTerm]);
-
-    // Khi focus lại screen
-    useFocusEffect(
-        React.useCallback(() => {
-            if (socket && myUsername) {
-                socket.emit("getFriends", myUsername);
-                socket.emit("getFriendRequests", myUsername);
-            }
-        }, [myUsername])
-    );
-
     // Xử lý accept/reject
+
     const handleRespond = (id, action) =>
         socket.emit("respondFriendRequest", { requestId: id, action });
 
     // Xử lý xóa bạn
+
     const handleRemoveFriend = (f) => {
         setFriendToRemove(f);
         setConfirmVisible(true);
     };
+
     const confirmRemoveFriend = () => {
         if (friendToRemove) {
             socket.emit("cancelFriend", { myUsername, friendUsername: friendToRemove });
@@ -179,8 +196,8 @@ const ContactsScreen = () => {
         setConfirmVisible(false);
         setFriendToRemove(null);
     };
-
     // Render từng nhóm bạn theo chữ cái
+
     const renderFriendGroup = ({ item: letter }) => (
         <View key={letter}>
             <Text style={styles.groupTitle}>{letter}</Text>
@@ -197,8 +214,8 @@ const ContactsScreen = () => {
             ))}
         </View>
     );
-
     // Render lời mời
+
     const renderFriendRequest = ({ item }) => (
         <View style={styles.requestItem}>
             <Text style={styles.requestText}>Từ: {item.from}</Text>
@@ -221,7 +238,7 @@ const ContactsScreen = () => {
 
     return (
         <View style={styles.container}>
-            {/* Header + Search */}
+            {/* Search */}
             <View style={styles.header}>
                 <View style={styles.searchContainer}>
                     <FontAwesome name="search" size={16} color="#888" />
@@ -237,7 +254,7 @@ const ContactsScreen = () => {
                 </View>
             </View>
 
-            {/* Menu tab */}
+            {/* Tabs */}
             <View style={styles.menuContainer}>
                 {menuItems.map((m) => (
                     <TouchableOpacity
@@ -272,7 +289,7 @@ const ContactsScreen = () => {
                 ))}
             </View>
 
-            {/* Content */}
+            {/* Nội dung */}
             <View style={styles.content}>
                 {activeMenu === "Danh sách bạn bè" ? (
                     <>
@@ -307,7 +324,7 @@ const ContactsScreen = () => {
                 )}
             </View>
 
-            {/* Modal confirm xóa bạn */}
+            {/* Modal xác nhận xóa bạn */}
             <Modal visible={confirmVisible} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContainer}>
