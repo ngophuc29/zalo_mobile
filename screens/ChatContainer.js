@@ -62,6 +62,8 @@ const ChatContainer = ({
     const scrollViewRef = useRef();
     const [deleteConfirmMsgId, setDeleteConfirmMsgId] = useState(null);
     const [deleteConfirmRoom, setDeleteConfirmRoom] = useState(null);
+    // State để highlight tin nhắn khi scroll đến
+    const [highlightedMsgId, setHighlightedMsgId] = useState(null);
 
     useEffect(() => {
         if (scrollViewRef.current) {
@@ -231,15 +233,27 @@ const ChatContainer = ({
     const isStranger = partnerName && !friends.includes(partnerName);
     const isRequested = partnerName && requestedFriends.includes(partnerName);
 
+    // Scroll đến tin nhắn theo id và highlight
+    const scrollToMessage = (msgId) => {
+        const idx = messages.findIndex(m => (m._id || m.id) === msgId);
+        if (idx !== -1 && scrollViewRef.current) {
+            scrollViewRef.current.scrollToIndex({ index: idx, animated: true });
+            setHighlightedMsgId(msgId);
+            setTimeout(() => setHighlightedMsgId(null), 2000);
+        }
+    };
+
     const renderMessageItem = (msg) => {
         const isMine = msg.name === myname;
+        const isHighlighted = highlightedMsgId === (msg._id || msg.id);
 
         return (
             <View
                 key={getMessageId(msg)}
                 style={[
                     styles.messageItem,
-                    { alignSelf: isMine ? 'flex-end' : 'flex-start' }
+                    { alignSelf: isMine ? 'flex-end' : 'flex-start' },
+                    isHighlighted && { backgroundColor: '#fff9c4', borderRadius: 8, transitionDuration: '0.3s' }
                 ]}
             >
                 {isMine && (
@@ -307,46 +321,24 @@ const ChatContainer = ({
                         msg.replyTo.name &&
                         (msg.replyTo.message || msg.replyTo.fileUrl) && (
                             (() => {
-                                const originalExists = messages.some(
-                                    (m) =>
-                                        m._id === msg.replyTo.id ||
-                                        m.id === msg.replyTo.id
+                                const originalIdx = messages.findIndex(
+                                    (m) => m._id === msg.replyTo.id || m.id === msg.replyTo.id
                                 );
-
-                                return (
+                                const originalExists = originalIdx !== -1;
+                                const replyPreviewContent = (
                                     <View style={styles.replyPreview}>
                                         <Text style={styles.replyToText}>
                                             Replying to {msg.replyTo.name}
                                         </Text>
-
                                         {msg.replyTo.message ? (
-                                            <Text
-                                                style={[
-                                                    styles.replyMessageText,
-                                                    !originalExists &&
-                                                    styles.deletedReply
-                                                ]}
-                                            >
-                                                {originalExists
-                                                    ? msg.replyTo.message
-                                                    : 'Tin nhắn đã bị xóa'}
+                                            <Text style={[styles.replyMessageText, !originalExists && styles.deletedReply]}>
+                                                {originalExists ? msg.replyTo.message : 'Tin nhắn đã bị xóa'}
                                             </Text>
                                         ) : msg.replyTo.fileUrl ? (
                                             !originalExists ? (
-                                                <Text
-                                                    style={[
-                                                        styles.replyFileText,
-                                                        styles.deletedReply
-                                                    ]}
-                                                >
-                                                    Tin nhắn đã bị xóa
-                                                </Text>
+                                                <Text style={[styles.replyFileText, styles.deletedReply]}>Tin nhắn đã bị xóa</Text>
                                             ) : (
-                                                <View
-                                                    style={
-                                                        styles.replyFilePreview
-                                                    }
-                                                >
+                                                <View style={styles.replyFilePreview}>
                                                     {/\.(jpe?g|png|gif|webp)$/i.test(
                                                         msg.replyTo.fileUrl
                                                     ) ? (
@@ -391,6 +383,13 @@ const ChatContainer = ({
                                             )
                                         ) : null}
                                     </View>
+                                );
+                                return originalExists ? (
+                                    <TouchableOpacity onPress={() => scrollToMessage(msg.replyTo.id)}>
+                                        {replyPreviewContent}
+                                    </TouchableOpacity>
+                                ) : (
+                                    replyPreviewContent
                                 );
                             })()
                         )}
