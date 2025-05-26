@@ -65,6 +65,7 @@ const ChatContainer = ({
     // State để highlight tin nhắn khi scroll đến
     const [highlightedMsgId, setHighlightedMsgId] = useState(null);
     const [dummyState, setDummyState] = useState(0);
+    const [showDetailPanel, setShowDetailPanel] = useState(false);
 
     {/* Debug: log trạng thái lời mời kết bạn */ }
     
@@ -564,6 +565,15 @@ const ChatContainer = ({
         );
     };
     
+    // Helper lấy avatar đúng cho user (giống web)
+const getAvatarByName = (name) => {
+    if (!name) return "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/2048px-User-avatar.svg.png";
+    if (allUsers && Array.isArray(allUsers)) {
+        const user = allUsers.find((u) => u.username === name);
+        if (user && user.image) return user.image;
+    }
+    return "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/2048px-User-avatar.svg.png";
+};
 
     return (
         <View style={styles.container}>
@@ -572,68 +582,13 @@ const ChatContainer = ({
                     <Text style={styles.backButtonText}>👈</Text>
                 </TouchableOpacity>
                 <Text style={styles.roomHeader}>{getDisplayName(currentRoom)}</Text>
+                <TouchableOpacity style={styles.groupDetailsButton} onPress={() => setShowDetailPanel(true)}>
+                    <Text style={styles.groupDetailsButtonText}>Chi tiết đoạn chat</Text>
+                </TouchableOpacity>
                 {isGroupChat(currentRoom) && (
-                    <TouchableOpacity style={styles.groupDetailsButton} onPress={onGetGroupDetails}>
+                    <TouchableOpacity style={[styles.groupDetailsButton, { marginLeft: 8 }]} onPress={onGetGroupDetails}>
                         <Text style={styles.groupDetailsButtonText}>Group Details</Text>
                     </TouchableOpacity>
-                )}
-                {isPrivateChat(currentRoom) && isStranger && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, justifyContent: 'center' }}>
-                        <Text style={{ color: 'red', fontWeight: 'bold', marginRight: 8 }}>Người lạ</Text>
-                        {friendRequestStatus === 'sent' ? (
-                            <TouchableOpacity style={{ backgroundColor: '#ccc', padding: 8, borderRadius: 6 }} disabled>
-                                <Text style={{ color: '#888' }}>Đã gửi</Text>
-                            </TouchableOpacity>
-                        ) : friendRequestStatus === 'received' ? (
-                            <>
-                                <TouchableOpacity
-                                    style={{ backgroundColor: '#28a745', padding: 8, borderRadius: 6, marginRight: 8 }}
-                                    onPress={() => {
-                                        if (friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to))) {
-                                            const payload = friendRequestObj._id || friendRequestObj.id
-                                                ? { requestId: friendRequestObj._id || friendRequestObj.id, action: 'accepted' }
-                                                : { from: friendRequestObj.from, to: friendRequestObj.to, action: 'accepted' };
-                                            socket.emit('respondFriendRequest', payload);
-                                            // Đồng bộ lại friends và requests
-                                            socket.emit('getFriends', myname);
-                                            socket.emit('getFriendRequests', myname);
-                                        } else {
-                                            console.log('Không đủ thông tin friendRequestObj:', friendRequestObj);
-                                        }
-                                    }}
-                                    disabled={!(friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to)))}
-                                >
-                                    <Text style={{ color: '#fff' }}>Chấp nhận</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={{ backgroundColor: '#dc3545', padding: 8, borderRadius: 6 }}
-                                    onPress={() => {
-                                        if (friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to))) {
-                                            const payload = friendRequestObj._id || friendRequestObj.id
-                                                ? { requestId: friendRequestObj._id || friendRequestObj.id, action: 'rejected' }
-                                                : { from: friendRequestObj.from, to: friendRequestObj.to, action: 'rejected' };
-                                            socket.emit('respondFriendRequest', payload);
-                                            // Đồng bộ lại friends và requests
-                                            socket.emit('getFriends', myname);
-                                            socket.emit('getFriendRequests', myname);
-                                        } else {
-                                            console.log('Không đủ thông tin friendRequestObj:', friendRequestObj);
-                                        }
-                                    }}
-                                    disabled={!(friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to)))}
-                                >
-                                    <Text style={{ color: '#fff' }}>Từ chối</Text>
-                                </TouchableOpacity>
-                            </>
-                        ) : (
-                            <TouchableOpacity style={{ backgroundColor: '#007bff', padding: 8, borderRadius: 6 }} onPress={() => {
-                                handleAddFriend && handleAddFriend(partnerName);
-                                if (typeof setRequestedFriends === 'function') setRequestedFriends(prev => prev.includes(partnerName) ? prev : [...prev, partnerName]);
-                            }}>
-                                <Text style={{ color: '#fff' }}>Gửi lời mời kết bạn</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
                 )}
             </View>
 
@@ -775,6 +730,94 @@ const ChatContainer = ({
                         </View>
                     </View>
                 </Modal>
+            )}
+
+            {showDetailPanel && (
+                <View style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    width: 320,
+                    height: '100%',
+                    backgroundColor: '#fff',
+                    borderLeftWidth: 1,
+                    borderColor: '#eee',
+                    zIndex: 9999,
+                    shadowColor: '#000',
+                    shadowOpacity: 0.2,
+                    shadowOffset: { width: -2, height: 0 },
+                    shadowRadius: 8,
+                    elevation: 10,
+                }}>
+                    {/* Overlay */}
+                    <TouchableOpacity
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: -1000,
+                            width: 1000,
+                            height: '100%',
+                            backgroundColor: 'rgba(0,0,0,0.2)',
+                            zIndex: 9998,
+                        }}
+                        onPress={() => setShowDetailPanel(false)}
+                    />
+                    <View style={{ padding: 24, borderBottomWidth: 1, borderColor: '#eee', backgroundColor: '#f7f7f7', alignItems: 'center', position: 'relative' }}>
+                        {/* Avatar + tên */}
+                        {isGroupChat(currentRoom) ? (
+                            <View style={{ alignItems: 'center' }}>
+                                <Text style={{ fontSize: 32, color: '#007bff', marginBottom: 8 }}>👥</Text>
+                                <Text style={{ fontWeight: 'bold', fontSize: 20 }}>{getDisplayName(currentRoom)}</Text>
+                            </View>
+                        ) : (
+                            <View style={{ alignItems: 'center' }}>
+                                {/* <Image
+                                    source={{ uri: getAvatarByName(partnerName) }}
+                                    style={{ width: 64, height: 64, borderRadius: 32, marginBottom: 8 }}
+                                /> */}
+                                <Text style={{ fontWeight: 'bold', fontSize: 20 }}>{partnerName}</Text>
+                            </View>
+                        )}
+                        <TouchableOpacity onPress={() => setShowDetailPanel(false)} style={{ position: 'absolute', top: 16, right: 16 }}>
+                            <Text style={{ color: 'red', fontWeight: 'bold', fontSize: 16 }}>Đóng</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView style={{ flex: 1, padding: 24 }}>
+                        {/* Ảnh/Video đã gửi */}
+                        <View style={{ marginBottom: 32 }}>
+                            <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 12, borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 4 }}>Ảnh/Video</Text>
+                            {messages.filter(msg => msg.fileUrl && (/\.(jpe?g|png|gif|webp|mp4|webm|ogg)$/i.test(msg.fileUrl))).length === 0 && (
+                                <Text style={{ color: '#888', fontSize: 13 }}>Chưa có ảnh hoặc video nào</Text>
+                            )}
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                                {messages.filter(msg => msg.fileUrl && (/\.(jpe?g|png|gif|webp|mp4|webm|ogg)$/i.test(msg.fileUrl))).map((msg, idx) => (
+                                    <View key={msg._id || msg.id || idx} style={{ width: 90, height: 90, borderRadius: 8, overflow: 'hidden', backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center', margin: 4 }}>
+                                        {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
+                                            <Image source={{ uri: msg.fileUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                        ) : (
+                                            <Video source={{ uri: msg.fileUrl }} style={{ width: '100%', height: '100%' }} useNativeControls resizeMode="cover" />
+                                        )}
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                        {/* File đã gửi */}
+                        <View>
+                            <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 12, borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 4 }}>File</Text>
+                            {messages.filter(msg => msg.fileUrl && !(/\.(jpe?g|png|gif|webp|mp4|webm|ogg)$/i.test(msg.fileUrl))).length === 0 && (
+                                <Text style={{ color: '#888', fontSize: 13 }}>Chưa có file nào</Text>
+                            )}
+                            {messages.filter(msg => msg.fileUrl && !(/\.(jpe?g|png|gif|webp|mp4|webm|ogg)$/i.test(msg.fileUrl))).map((msg, idx) => (
+                                <View key={msg._id || msg.id || idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                                    <Text style={{ fontSize: 22, color: '#007bff', marginRight: 8 }}>📄</Text>
+                                    <TouchableOpacity onPress={() => Linking.openURL(msg.fileUrl)}>
+                                        <Text style={{ color: '#007bff', fontWeight: '500', fontSize: 15 }}>{msg.fileName || 'File'}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                    </ScrollView>
+                </View>
             )}
 
          
