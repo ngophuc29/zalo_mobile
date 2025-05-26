@@ -47,7 +47,7 @@ const ChatContainer = ({
     handleDisbandGroup,
     setGroupDetailsVisible,
     allUsers,
-    friends ,
+    friends,
     requestedFriends,
     friendRequests, // <-- thêm prop này
     handleAddFriend,
@@ -68,20 +68,20 @@ const ChatContainer = ({
     const [showDetailPanel, setShowDetailPanel] = useState(false);
 
     {/* Debug: log trạng thái lời mời kết bạn */ }
-    
-        useEffect(() => {
-            console.log('friendRequests:', friendRequests);
-            console.log('requestedFriends:', requestedFriends);
-        }, [friendRequests, requestedFriends])
-    
+
+    useEffect(() => {
+        console.log('friendRequests:', friendRequests);
+        console.log('requestedFriends:', requestedFriends);
+    }, [friendRequests, requestedFriends])
+
 
     {/* Force re-render UI trạng thái friend khi các props liên quan friend thay đổi */ }
-    
-        useEffect(() => {
-            // Dummy state để trigger re-render
-            setDummyState(Date.now());
-        }, [friends, requestedFriends, friendRequests, currentRoom, myname])
-    
+
+    useEffect(() => {
+        // Dummy state để trigger re-render
+        setDummyState(Date.now());
+    }, [friends, requestedFriends, friendRequests, currentRoom, myname])
+
     useEffect(() => {
         if (scrollViewRef.current) {
             scrollViewRef.current.scrollToEnd({ animated: true });
@@ -564,16 +564,7 @@ const ChatContainer = ({
             </View>
         );
     };
-    
-    // Helper lấy avatar đúng cho user (giống web)
-const getAvatarByName = (name) => {
-    if (!name) return "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/2048px-User-avatar.svg.png";
-    if (allUsers && Array.isArray(allUsers)) {
-        const user = allUsers.find((u) => u.username === name);
-        if (user && user.image) return user.image;
-    }
-    return "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/2048px-User-avatar.svg.png";
-};
+
 
     return (
         <View style={styles.container}>
@@ -582,13 +573,71 @@ const getAvatarByName = (name) => {
                     <Text style={styles.backButtonText}>👈</Text>
                 </TouchableOpacity>
                 <Text style={styles.roomHeader}>{getDisplayName(currentRoom)}</Text>
-                <TouchableOpacity style={styles.groupDetailsButton} onPress={() => setShowDetailPanel(true)}>
+                <TouchableOpacity style={[styles.groupDetailsButton, { backgroundColor: '#007bff', marginRight: 8 }]} onPress={() => setShowDetailPanel(true)}>
                     <Text style={styles.groupDetailsButtonText}>Chi tiết đoạn chat</Text>
                 </TouchableOpacity>
                 {isGroupChat(currentRoom) && (
-                    <TouchableOpacity style={[styles.groupDetailsButton, { marginLeft: 8 }]} onPress={onGetGroupDetails}>
+                    <TouchableOpacity style={styles.groupDetailsButton} onPress={onGetGroupDetails}>
                         <Text style={styles.groupDetailsButtonText}>Group Details</Text>
                     </TouchableOpacity>
+                )}
+                {isPrivateChat(currentRoom) && isStranger && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, justifyContent: 'center' }}>
+                        <Text style={{ color: 'red', fontWeight: 'bold', marginRight: 8 }}>Người lạ</Text>
+                        {friendRequestStatus === 'sent' ? (
+                            <TouchableOpacity style={{ backgroundColor: '#ccc', padding: 8, borderRadius: 6 }} disabled>
+                                <Text style={{ color: '#888' }}>Đã gửi</Text>
+                            </TouchableOpacity>
+                        ) : friendRequestStatus === 'received' ? (
+                            <>
+                                <TouchableOpacity
+                                    style={{ backgroundColor: '#28a745', padding: 8, borderRadius: 6, marginRight: 8 }}
+                                    onPress={() => {
+                                        if (friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to))) {
+                                            const payload = friendRequestObj._id || friendRequestObj.id
+                                                ? { requestId: friendRequestObj._id || friendRequestObj.id, action: 'accepted' }
+                                                : { from: friendRequestObj.from, to: friendRequestObj.to, action: 'accepted' };
+                                            socket.emit('respondFriendRequest', payload);
+                                            // Đồng bộ lại friends và requests
+                                            socket.emit('getFriends', myname);
+                                            socket.emit('getFriendRequests', myname);
+                                        } else {
+                                            console.log('Không đủ thông tin friendRequestObj:', friendRequestObj);
+                                        }
+                                    }}
+                                    disabled={!(friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to)))}
+                                >
+                                    <Text style={{ color: '#fff' }}>Chấp nhận</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={{ backgroundColor: '#dc3545', padding: 8, borderRadius: 6 }}
+                                    onPress={() => {
+                                        if (friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to))) {
+                                            const payload = friendRequestObj._id || friendRequestObj.id
+                                                ? { requestId: friendRequestObj._id || friendRequestObj.id, action: 'rejected' }
+                                                : { from: friendRequestObj.from, to: friendRequestObj.to, action: 'rejected' };
+                                            socket.emit('respondFriendRequest', payload);
+                                            // Đồng bộ lại friends và requests
+                                            socket.emit('getFriends', myname);
+                                            socket.emit('getFriendRequests', myname);
+                                        } else {
+                                            console.log('Không đủ thông tin friendRequestObj:', friendRequestObj);
+                                        }
+                                    }}
+                                    disabled={!(friendRequestObj && (friendRequestObj._id || friendRequestObj.id || (friendRequestObj.from && friendRequestObj.to)))}
+                                >
+                                    <Text style={{ color: '#fff' }}>Từ chối</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <TouchableOpacity style={{ backgroundColor: '#007bff', padding: 8, borderRadius: 6 }} onPress={() => {
+                                handleAddFriend && handleAddFriend(partnerName);
+                                if (typeof setRequestedFriends === 'function') setRequestedFriends(prev => prev.includes(partnerName) ? prev : [...prev, partnerName]);
+                            }}>
+                                <Text style={{ color: '#fff' }}>Gửi lời mời kết bạn</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 )}
             </View>
 
@@ -749,7 +798,6 @@ const getAvatarByName = (name) => {
                     shadowRadius: 8,
                     elevation: 10,
                 }}>
-                    {/* Overlay */}
                     <TouchableOpacity
                         style={{
                             position: 'absolute',
@@ -819,8 +867,6 @@ const getAvatarByName = (name) => {
                     </ScrollView>
                 </View>
             )}
-
-         
         </View>
     );
 };
@@ -1038,7 +1084,7 @@ const styles = StyleSheet.create({
         color: '#888',
         marginTop: 4,
         alignSelf: 'flex-end'
-      },
+    },
 });
 
 export default ChatContainer;
