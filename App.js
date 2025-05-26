@@ -47,38 +47,56 @@ if (Platform.OS === 'android') {
   };
 }
 
-const BottomTabs = ({ setIsLoggedIn }) => (
-  <Tab.Navigator 
-    screenOptions={({ route }) => ({
-      headerShown: false,
-      tabBarIcon: ({ focused, color, size }) => {
-        let iconName;
+const BottomTabs = ({ setIsLoggedIn }) => {
+  const [tabRefreshKey, setTabRefreshKey] = useState({ Chat: 0, Contacts: 0, User: 0 });
 
-        if (route.name === 'Chat') {
-          iconName = 'comments';
-        } else if (route.name === 'Contacts') {
-          iconName = 'users';
-        } else if (route.name === 'User') {
-          iconName = 'user';
-        }
-
-        return <FontAwesome name={iconName} size={size} color={color} />;
-      },
-      tabBarActiveTintColor: '#007AFF',
-      tabBarInactiveTintColor: 'gray',
-      tabBarStyle: {
-        height: Platform.OS === 'ios' ? 80 : 60,
-        paddingBottom: Platform.OS === 'ios' ? 30 : 10,
-      },
-    })}
-  >
-    <Tab.Screen name="Chat" component={ChatScreen} />
-    <Tab.Screen name="Contacts" component={ContactsScreen} />
-    <Tab.Screen name="User">
-      {(props) => <UserScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-    </Tab.Screen>
-  </Tab.Navigator>
-);
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
+          if (route.name === 'Chat') {
+            iconName = 'comments';
+          } else if (route.name === 'Contacts') {
+            iconName = 'users';
+          } else if (route.name === 'User') {
+            iconName = 'user';
+          }
+          return <FontAwesome name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: 'gray',
+        tabBarStyle: {
+          height: Platform.OS === 'ios' ? 80 : 60,
+          paddingBottom: Platform.OS === 'ios' ? 30 : 10,
+        },
+      })}
+    >
+      <Tab.Screen
+        name="Chat"
+        children={props => <ChatScreen {...props} forceRefresh={tabRefreshKey.Chat} />}
+        listeners={{
+          focus: () => setTabRefreshKey(k => ({ ...k, Chat: Date.now() }))
+        }}
+      />
+      <Tab.Screen
+        name="Contacts"
+        children={props => <ContactsScreen {...props} forceRefresh={tabRefreshKey.Contacts} />}
+        listeners={{
+          focus: () => setTabRefreshKey(k => ({ ...k, Contacts: Date.now() }))
+        }}
+      />
+      <Tab.Screen
+        name="User"
+        children={props => <UserScreen {...props} setIsLoggedIn={setIsLoggedIn} forceRefresh={tabRefreshKey.User} />}
+        listeners={{
+          focus: () => setTabRefreshKey(k => ({ ...k, User: Date.now() }))
+        }}
+      />
+    </Tab.Navigator>
+  );
+};
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(null);

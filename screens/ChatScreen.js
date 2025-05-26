@@ -111,6 +111,7 @@ const ChatScreen = () => {
     const [selectedForwardRooms, setSelectedForwardRooms] = useState([]);
 
     const [isSearching, setIsSearching] = useState(false);
+    const [forceUpdate, setForceUpdate] = useState(0);
 
     useEffect(() => { currentRoomRef.current = activeRoom; }, [activeRoom]);
 
@@ -171,15 +172,27 @@ const ChatScreen = () => {
 
     useEffect(() => {
         if (!socket || !username) return;
-        // Khi bị hủy kết bạn, đồng bộ lại requestedFriends
+        // Khi bị hủy kết bạn, đồng bộ lại friends, friendRequests, requestedFriends
         const onFriendRemoved = (data) => {
+            // Xác định partnerName nếu đang ở phòng chat cá nhân
+            let partnerName = null;
+            if (activeRoom && activeRoom.includes('-')) {
+                const parts = activeRoom.split('-');
+                partnerName = parts.find(name => name !== username);
+            }
+            if (partnerName) {
+                setRequestedFriends(prev => prev.filter(u => u !== partnerName));
+            }
+            socket.emit('getFriends', username);
+            socket.emit('getFriendRequests', username);
             socket.emit('getSentFriendRequests', username);
+            setForceUpdate(Date.now()); // Force re-render để cập nhật UI
         };
         socket.on('friendRemoved', onFriendRemoved);
         return () => {
             socket.off('friendRemoved', onFriendRemoved);
         };
-    }, [socket, username]);
+    }, [socket, username, activeRoom]);
 
     useEffect(() => {
         const onFriendsList = (friendsList) => {
@@ -219,6 +232,8 @@ const ChatScreen = () => {
                     .catch(err => console.error("Error saving activeChats:", err));
                 return updated;
             });
+            // Xóa partnerName khỏi requestedFriends nếu có
+            setRequestedFriends(prev => prev.filter(u => u !== friend));
             socket.emit("join", roomId);
             joinedRoomsRef.current.add(roomId);
             showToast("Kết bạn", `Bạn đã kết bạn với ${friend}`, "success");
@@ -1005,7 +1020,7 @@ const ChatScreen = () => {
                     handleAddFriend={handleAddFriend}
                     onForwardMessage={handleForwardMessage}
                     socket={socket}
-
+                    forceUpdate={forceUpdate} // Truyền prop forceUpdate để re-render
                 />
                 <Modal
                     visible={forwardModalVisible}

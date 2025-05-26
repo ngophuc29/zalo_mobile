@@ -64,7 +64,23 @@ const ChatContainer = ({
     const [deleteConfirmRoom, setDeleteConfirmRoom] = useState(null);
     // State để highlight tin nhắn khi scroll đến
     const [highlightedMsgId, setHighlightedMsgId] = useState(null);
+    const [dummyState, setDummyState] = useState(0);
 
+    {/* Debug: log trạng thái lời mời kết bạn */ }
+    
+        useEffect(() => {
+            console.log('friendRequests:', friendRequests);
+            console.log('requestedFriends:', requestedFriends);
+        }, [friendRequests, requestedFriends])
+    
+
+    {/* Force re-render UI trạng thái friend khi các props liên quan friend thay đổi */ }
+    
+        useEffect(() => {
+            // Dummy state để trigger re-render
+            setDummyState(Date.now());
+        }, [friends, requestedFriends, friendRequests, currentRoom, myname])
+    
     useEffect(() => {
         if (scrollViewRef.current) {
             scrollViewRef.current.scrollToEnd({ animated: true });
@@ -761,11 +777,7 @@ const ChatContainer = ({
                 </Modal>
             )}
 
-            {/* Debug: log trạng thái lời mời kết bạn */}
-            {useEffect(() => {
-                console.log('friendRequests:', friendRequests);
-                console.log('requestedFriends:', requestedFriends);
-            }, [friendRequests, requestedFriends])}
+         
         </View>
     );
 };
