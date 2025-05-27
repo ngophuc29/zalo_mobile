@@ -93,9 +93,9 @@ const LoginScreen = ({ setIsLoggedIn }) => {
                             Đăng ký ngay
                         </Text>
                     </Text>
-                    <Text style={styles.linkText} onPress={() => navigation.navigate('ResetPassword')}>
-                        Quên mật khẩu?
-                    </Text>
+                    <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={{ marginTop: 16 }}>
+                        <Text style={{ color: '#1890ff', textAlign: 'center', textDecorationLine: 'underline' }}>Quên mật khẩu?</Text>
+                    </TouchableOpacity>
                 </View>
             </View>
         </View>

@@ -22,7 +22,7 @@ const VerifyOtpScreen = () => {
 
     const handleVerifyOtp = async () => {
         if (!otp.trim()) {
-            Alert.alert('Lỗi', 'Vui lòng nhập OTP!');
+            alert('Lỗi', 'Vui lòng nhập OTP!');
             return;
         }
         setLoading(true);
@@ -32,7 +32,7 @@ const VerifyOtpScreen = () => {
                 otp,
             });
             if (response.status === 200) {
-                Alert.alert('Thành công', 'Xác thực OTP thành công!');
+                alert('Thành công', 'Xác thực OTP thành công!');
                 if (type === 'new') {
                     navigation.navigate('RegisterStep2', { email });
                 } else {
@@ -40,7 +40,7 @@ const VerifyOtpScreen = () => {
                 }
             }
         } catch (error) {
-            Alert.alert(
+            alert(
                 'Lỗi',
                 'OTP không hợp lệ: ' + (error.response?.data?.message || 'Lỗi server')
             );

@@ -28,6 +28,12 @@ const RegisterStep2Screen = () => {
     const [image, setImage] = useState(null);
     const [loading, setLoading] = useState(false);
 
+    const [usernameError, setUsernameError] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+    const [fullnameError, setFullnameError] = useState('');
+    const [phoneError, setPhoneError] = useState('');
+    const [birthdayError, setBirthdayError] = useState('');
+
     const apiUrl = 'https://sockettubuild.onrender.com/api'; // đổi khi test
 
     const isOldEnough = (birth) => {
@@ -65,6 +71,85 @@ const RegisterStep2Screen = () => {
                 }
             }
         );
+    };
+
+    const validateUsername = async (value) => {
+        if (!value) {
+            setUsernameError('Tên đăng nhập không được để trống');
+            return false;
+        }
+        if (value.length < 4) {
+            setUsernameError('Tên đăng nhập phải từ 4 ký tự trở lên');
+            return false;
+        }
+        try {
+            const res = await axios.get(`${apiUrl}/accounts/check-username`, { params: { username: value } });
+            if (res.data.exists) {
+                setUsernameError('Tên đăng nhập đã tồn tại');
+                return false;
+            }
+        } catch (e) {}
+        setUsernameError('');
+        return true;
+    };
+
+    const validatePassword = (value) => {
+        if (!value) {
+            setPasswordError('Mật khẩu không được để trống');
+            return false;
+        }
+        if (value.length < 6) {
+            setPasswordError('Mật khẩu phải từ 6 ký tự trở lên');
+            return false;
+        }
+        setPasswordError('');
+        return true;
+    };
+
+    const validateFullname = (value) => {
+        if (!value) {
+            setFullnameError('Họ và tên không được để trống');
+            return false;
+        }
+        setFullnameError('');
+        return true;
+    };
+
+    const validatePhone = async (value) => {
+        if (!value) {
+            setPhoneError('Số điện thoại không được để trống');
+            return false;
+        }
+        if (!/^\d{10,11}$/.test(value)) {
+            setPhoneError('Số điện thoại không hợp lệ');
+            return false;
+        }
+        try {
+            const res = await axios.get(`${apiUrl}/accounts/check-phone`, { params: { phone: value } });
+            if (res.data.exists) {
+                setPhoneError('Số điện thoại đã được sử dụng');
+                return false;
+            }
+        } catch (e) {}
+        setPhoneError('');
+        return true;
+    };
+
+    const validateBirthday = (value) => {
+        if (!value) {
+            setBirthdayError('Ngày sinh không được để trống');
+            return false;
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            setBirthdayError('Định dạng ngày sinh không hợp lệ (YYYY-MM-DD)');
+            return false;
+        }
+        if (!isOldEnough(value)) {
+            setBirthdayError('Bạn phải từ 13 tuổi trở lên');
+            return false;
+        }
+        setBirthdayError('');
+        return true;
     };
 
     const handleRegisterStep2 = async () => {
@@ -125,38 +210,58 @@ const RegisterStep2Screen = () => {
             <View style={styles.card}>
                 <Text style={styles.title}>Đăng Ký Bước 2</Text>
 
+                <Text style={styles.inputTitle}>Tên đăng nhập</Text>
                 <TextInput
                     style={styles.input}
                     placeholder="Tên đăng nhập"
                     value={username}
                     onChangeText={setUsername}
+                    onBlur={() => validateUsername(username)}
+                    autoCapitalize="none"
                 />
+                {!!usernameError && <Text style={styles.errorText}>{usernameError}</Text>}
+
+                <Text style={styles.inputTitle}>Mật khẩu</Text>
                 <TextInput
                     style={styles.input}
                     placeholder="Mật khẩu"
                     secureTextEntry
                     value={password}
                     onChangeText={setPassword}
+                    onBlur={() => validatePassword(password)}
                 />
+                {!!passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
+
+                <Text style={styles.inputTitle}>Họ và tên</Text>
                 <TextInput
                     style={styles.input}
                     placeholder="Họ và tên"
                     value={fullname}
                     onChangeText={setFullname}
+                    onBlur={() => validateFullname(fullname)}
                 />
+                {!!fullnameError && <Text style={styles.errorText}>{fullnameError}</Text>}
+
+                <Text style={styles.inputTitle}>Số điện thoại</Text>
                 <TextInput
                     style={styles.input}
                     placeholder="Số điện thoại"
                     keyboardType="phone-pad"
                     value={phone}
                     onChangeText={setPhone}
+                    onBlur={() => validatePhone(phone)}
                 />
+                {!!phoneError && <Text style={styles.errorText}>{phoneError}</Text>}
+
+                <Text style={styles.inputTitle}>Ngày sinh (YYYY-MM-DD)</Text>
                 <TextInput
                     style={styles.input}
                     placeholder="Ngày sinh (YYYY-MM-DD)"
                     value={birthday}
                     onChangeText={setBirthday}
+                    onBlur={() => validateBirthday(birthday)}
                 />
+                {!!birthdayError && <Text style={styles.errorText}>{birthdayError}</Text>}
 
                 <TouchableOpacity style={styles.imageButton} onPress={handleSelectImage}>
                     <Text style={styles.imageButtonText}>Chọn ảnh đại diện</Text>
@@ -208,6 +313,17 @@ const styles = StyleSheet.create({
         borderRadius: 4,
         paddingHorizontal: 10,
         marginBottom: 15,
+    },
+    inputTitle: {
+        fontWeight: 'bold',
+        marginBottom: 4,
+        marginTop: 8,
+    },
+    errorText: {
+        color: 'red',
+        marginBottom: 8,
+        marginLeft: 2,
+        fontSize: 13,
     },
     imageButton: {
         backgroundColor: '#6c63ff',
