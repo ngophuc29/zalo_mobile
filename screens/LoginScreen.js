@@ -25,7 +25,7 @@ const LoginScreen = ({ setIsLoggedIn }) => {
         }
 
         setLoading(true);
-        const apiUrl = 'http://localhost:5000/api';
+        const apiUrl = 'https://sockettubuild.onrender.com/api';
 
         try {
             const response = await axios.post(`${apiUrl}/accounts/login`, {

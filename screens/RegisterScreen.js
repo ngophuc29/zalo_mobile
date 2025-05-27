@@ -34,7 +34,7 @@ const RegisterScreen = () => {
             return;
         }
         try {
-            const response = await axios.get('http://localhost:5000/api/accounts/check-email', {
+            const response = await axios.get('https://sockettubuild.onrender.com/api/accounts/check-email', {
                 params: { email },
             });
             if (response.data.exists) {
@@ -65,7 +65,7 @@ const RegisterScreen = () => {
 
         setLoading(true);
         try {
-            const response = await axios.post('http://localhost:5000/api/accounts/register-step1', { email });
+            const response = await axios.post('https://sockettubuild.onrender.com/api/accounts/register-step1', { email });
             if (response.status === 200) {
                 // Thay alert bằng Toast cho thông báo thành công
                 Toast.show({

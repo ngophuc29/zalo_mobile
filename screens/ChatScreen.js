@@ -22,7 +22,7 @@ import { CheckBox } from 'react-native';
 import { MdGroupAdd } from "react-icons/md";
 import { useFocusEffect } from '@react-navigation/native';
 
-const socket = io("http://localhost:5000");
+const socket = io("https://sockettubuild.onrender.com");
 
 const emotions = [
     { id: 1, icon: "❤️" },
@@ -361,7 +361,7 @@ const ChatScreen = () => {
     }, [groupDetailsVisible, activeRoom]);
 
     useEffect(() => {
-        fetch("http://localhost:5000/api/accounts")
+        fetch("https://sockettubuild.onrender.com/api/accounts")
             .then(res => res.json())
             .then(data => setAccounts(data))
             .catch(err => console.error("Error fetching accounts:", err));

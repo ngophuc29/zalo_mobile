@@ -14,7 +14,7 @@ import Toast from "react-native-toast-message";
 import { FontAwesome, MaterialIcons } from "@expo/vector-icons";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000");
+const socket = io("https://sockettubuild.onrender.com");
 
 const menuItems = [
     { icon: "users", label: "Danh sách bạn bè" },

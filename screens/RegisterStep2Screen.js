@@ -28,7 +28,7 @@ const RegisterStep2Screen = () => {
     const [image, setImage] = useState(null);
     const [loading, setLoading] = useState(false);
 
-    const apiUrl = 'http://localhost:5000/api'; // đổi khi test
+    const apiUrl = 'https://sockettubuild.onrender.com/api'; // đổi khi test
 
     const isOldEnough = (birth) => {
         const age = dayjs().diff(dayjs(birth), 'year');
