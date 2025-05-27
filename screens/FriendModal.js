@@ -230,21 +230,23 @@ const FriendModal = ({
     const renderSentRequestsTab = () => (
         <FlatList
             data={requestedFriends}
-            keyExtractor={(item, index) => index.toString()}
+            keyExtractor={(item, index) => (item._id ? item._id : index.toString())}
             renderItem={({ item }) => {
-                const account = accounts.find(acc => acc.username === item);
+                // If item is an object, use item.to as username
+                const username = typeof item === 'string' ? item : item.to;
+                const account = accounts.find(acc => acc.username === username);
                 return (
                     <View style={styles.listItem}>
                         <View>
-                            <Text style={styles.username}>{item}</Text>
+                            <Text style={styles.username}>{username}</Text>
                             {account && <Text style={styles.fullname}>{account.fullname}</Text>}
                         </View>
                         <TouchableOpacity
                             style={styles.withdrawButton}
-                            onPress={() => cancelFriendHandler(item)}
-                            disabled={loadingFriend === item}
+                            onPress={() => cancelFriendHandler(username)}
+                            disabled={loadingFriend === username}
                         >
-                            {loadingFriend === item ? (
+                            {loadingFriend === username ? (
                                 <ActivityIndicator color="#fff" />
                             ) : (
                                 <Text style={styles.addButtonText}>Thu hồi</Text>
@@ -262,22 +264,24 @@ const FriendModal = ({
     const renderReceivedRequestsTab = () => (
         <FlatList
             data={friendRequests}
-            keyExtractor={(item, index) => index.toString()}
+            keyExtractor={(item, index) => (item._id ? item._id : index.toString())}
             renderItem={({ item }) => {
-                const account = accounts.find(acc => acc.username === item);
+                // If item is an object, use item.from as username
+                const username = typeof item === 'string' ? item : item.from;
+                const account = accounts.find(acc => acc.username === username);
                 return (
                     <View style={styles.listItem}>
                         <View>
-                            <Text style={styles.username}>{item}</Text>
+                            <Text style={styles.username}>{username}</Text>
                             {account && <Text style={styles.fullname}>{account.fullname}</Text>}
                         </View>
                         <View style={styles.requestButtonsContainer}>
                             <TouchableOpacity
                                 style={[styles.requestButton, styles.acceptButton]}
-                                onPress={() => respondToRequestHandler(item, true)}
-                                disabled={loadingFriend === item}
+                                onPress={() => respondToRequestHandler(username, true)}
+                                disabled={loadingFriend === username}
                             >
-                                {loadingFriend === item ? (
+                                {loadingFriend === username ? (
                                     <ActivityIndicator color="#fff" />
                                 ) : (
                                     <Text style={styles.addButtonText}>Chấp nhận</Text>
@@ -285,10 +289,10 @@ const FriendModal = ({
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.requestButton, styles.rejectButton]}
-                                onPress={() => respondToRequestHandler(item, false)}
-                                disabled={loadingFriend === item}
+                                onPress={() => respondToRequestHandler(username, false)}
+                                disabled={loadingFriend === username}
                             >
-                                {loadingFriend === item ? (
+                                {loadingFriend === username ? (
                                     <ActivityIndicator color="#fff" />
                                 ) : (
                                     <Text style={styles.addButtonText}>Từ chối</Text>
