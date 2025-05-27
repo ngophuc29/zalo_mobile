@@ -66,6 +66,12 @@ const ChatContainer = ({
     const [highlightedMsgId, setHighlightedMsgId] = useState(null);
     const [dummyState, setDummyState] = useState(0);
     const [showDetailPanel, setShowDetailPanel] = useState(false);
+    const [showAllImagesVideos, setShowAllImagesVideos] = useState(false);
+    const [showAllFiles, setShowAllFiles] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
+    const prevScrollHeightRef = useRef(0);
+    const prevMessagesLength = useRef(messages.length);
 
     {/* Debug: log trạng thái lời mời kết bạn */ }
 
@@ -262,6 +268,9 @@ const ChatContainer = ({
     };
 
     const renderMessageItem = (msg) => {
+        // Ẩn message kiểu call trên app mobile
+        if (msg.type === 'call') return null;
+
         const isMine = msg.name === myname;
         const isHighlighted = highlightedMsgId === (msg._id || msg.id);
 
@@ -565,6 +574,81 @@ const ChatContainer = ({
         );
     };
 
+    // Lấy toàn bộ file/ảnh/video của đoạn chat từ server khi mở panel chi tiết (giống web)
+    const [allFilesInRoom, setAllFilesInRoom] = useState([]);
+    useEffect(() => {
+        if (showDetailPanel && currentRoom && socket) {
+            socket.emit('getAllFilesInRoom', currentRoom);
+        }
+    }, [showDetailPanel, currentRoom, socket]);
+    useEffect(() => {
+        if (!socket) return;
+        const handler = (files) => setAllFilesInRoom(files || []);
+        socket.on('allFilesInRoom', handler);
+        return () => socket.off('allFilesInRoom', handler);
+    }, [socket]);
+    const allSentImagesVideos = allFilesInRoom.filter(msg =>
+        msg.fileType === 'image' ||
+        /\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ||
+        msg.fileType === 'video' ||
+        /\.(mp4|webm|ogg)$/i.test(msg.fileUrl)
+    );
+    const allSentOtherFiles = allFilesInRoom.filter(msg =>
+        !(
+            msg.fileType === 'image' ||
+            /\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ||
+            msg.fileType === 'video' ||
+            /\.(mp4|webm|ogg)$/i.test(msg.fileUrl)
+        )
+    );
+
+    // Hàm load thêm tin nhắn khi scroll lên đầu
+    const handleLoadMore = () => {
+        if (!loadingMore && hasMore && messages.length > 0) {
+            const oldest = messages[0];
+            socket.emit('loadMoreMessages', {
+                room: currentRoom,
+                before: oldest.createdAt // ISO string
+            });
+            setLoadingMore(true);
+        }
+    };
+
+    // Lắng nghe sự kiện moreMessages từ server
+    useEffect(() => {
+        if (!socket) return;
+        const onMoreMessages = ({ room, messages: more }) => {
+            if (room === currentRoom) {
+                if (more.length === 0) setHasMore(false);
+                setMessages(prev => {
+                    // Gộp, loại trùng
+                    const all = [...more, ...prev];
+                    const unique = [];
+                    const seen = new Set();
+                    for (const m of all) {
+                        const id = m._id?.toString() || m.id?.toString();
+                        if (!seen.has(id)) {
+                            unique.push(m);
+                            seen.add(id);
+                        }
+                    }
+                    unique.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                    return unique;
+                });
+                setLoadingMore(false);
+            }
+        };
+        socket.on('moreMessages', onMoreMessages);
+        return () => socket.off('moreMessages', onMoreMessages);
+    }, [currentRoom, socket, hasMore]);
+
+    // ScrollView: khi scroll lên đầu thì load more
+    const onScroll = (event) => {
+        const { contentOffset } = event.nativeEvent;
+        if (contentOffset.y <= 10 && !loadingMore && hasMore && messages.length > 0) {
+            handleLoadMore();
+        }
+    };
 
     return (
         <View style={styles.container}>
@@ -834,11 +918,9 @@ const ChatContainer = ({
                         {/* Ảnh/Video đã gửi */}
                         <View style={{ marginBottom: 32 }}>
                             <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 12, borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 4 }}>Ảnh/Video</Text>
-                            {messages.filter(msg => msg.fileUrl && (/\.(jpe?g|png|gif|webp|mp4|webm|ogg)$/i.test(msg.fileUrl))).length === 0 && (
-                                <Text style={{ color: '#888', fontSize: 13 }}>Chưa có ảnh hoặc video nào</Text>
-                            )}
+                            {allSentImagesVideos.length === 0 && <Text style={{ color: '#888', fontSize: 13 }}>Chưa có ảnh hoặc video nào</Text>}
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                                {messages.filter(msg => msg.fileUrl && (/\.(jpe?g|png|gif|webp|mp4|webm|ogg)$/i.test(msg.fileUrl))).map((msg, idx) => (
+                                {(showAllImagesVideos ? allSentImagesVideos : allSentImagesVideos.slice(0, 6)).map((msg, idx) => (
                                     <View key={msg._id || msg.id || idx} style={{ width: 90, height: 90, borderRadius: 8, overflow: 'hidden', backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center', margin: 4 }}>
                                         {/\.(jpe?g|png|gif|webp)$/i.test(msg.fileUrl) ? (
                                             <Image source={{ uri: msg.fileUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
@@ -848,14 +930,22 @@ const ChatContainer = ({
                                     </View>
                                 ))}
                             </View>
+                            {allSentImagesVideos.length > 6 && !showAllImagesVideos && (
+                                <TouchableOpacity onPress={() => setShowAllImagesVideos(true)} style={{ marginTop: 8 }}>
+                                    <Text style={{ color: '#007bff' }}>Xem tất cả</Text>
+                                </TouchableOpacity>
+                            )}
+                            {showAllImagesVideos && allSentImagesVideos.length > 6 && (
+                                <TouchableOpacity onPress={() => setShowAllImagesVideos(false)} style={{ marginTop: 8 }}>
+                                    <Text style={{ color: '#007bff' }}>Ẩn bớt</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
-                        {/* File đã gửi */}
+                        {/* File */}
                         <View>
                             <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 12, borderBottomWidth: 1, borderColor: '#eee', paddingBottom: 4 }}>File</Text>
-                            {messages.filter(msg => msg.fileUrl && !(/\.(jpe?g|png|gif|webp|mp4|webm|ogg)$/i.test(msg.fileUrl))).length === 0 && (
-                                <Text style={{ color: '#888', fontSize: 13 }}>Chưa có file nào</Text>
-                            )}
-                            {messages.filter(msg => msg.fileUrl && !(/\.(jpe?g|png|gif|webp|mp4|webm|ogg)$/i.test(msg.fileUrl))).map((msg, idx) => (
+                            {allSentOtherFiles.length === 0 && <Text style={{ color: '#888', fontSize: 13 }}>Chưa có file nào</Text>}
+                            {(showAllFiles ? allSentOtherFiles : allSentOtherFiles.slice(0, 6)).map((msg, idx) => (
                                 <View key={msg._id || msg.id || idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                                     <Text style={{ fontSize: 22, color: '#007bff', marginRight: 8 }}>📄</Text>
                                     <TouchableOpacity onPress={() => Linking.openURL(msg.fileUrl)}>
@@ -863,6 +953,16 @@ const ChatContainer = ({
                                     </TouchableOpacity>
                                 </View>
                             ))}
+                            {allSentOtherFiles.length > 6 && !showAllFiles && (
+                                <TouchableOpacity onPress={() => setShowAllFiles(true)} style={{ marginTop: 8 }}>
+                                    <Text style={{ color: '#007bff' }}>Xem tất cả</Text>
+                                </TouchableOpacity>
+                            )}
+                            {showAllFiles && allSentOtherFiles.length > 6 && (
+                                <TouchableOpacity onPress={() => setShowAllFiles(false)} style={{ marginTop: 8 }}>
+                                    <Text style={{ color: '#007bff' }}>Ẩn bớt</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </ScrollView>
                 </View>
