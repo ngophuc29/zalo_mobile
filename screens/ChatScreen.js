@@ -1210,9 +1210,10 @@ const ChatScreen = () => {
                 <View style={{ flex: 1 }}>
                     <View style={styles.chatHeader}>
                         <Text style={styles.chatHeaderText}>Chats</Text>
-                        <TouchableOpacity style={[styles.addButton, { backgroundColor:'transparent'}]} onPress={() => setGroupModalVisible(true)}>
-                            <Text style={[styles.addButtonText, { color: '#000' }]}>
-                                <MdGroupAdd size={20} />
+                        <TouchableOpacity style={[styles.addButton ]} onPress={() => setGroupModalVisible(true)}>
+                            <Text style={[styles.addButtonText, { color: '#fff' }]}>
+                                    {/* <MdGroupAdd size={20} /> */}
+                                    Tạo nhóm
                             </Text>
                         </TouchableOpacity>
                     </View>
